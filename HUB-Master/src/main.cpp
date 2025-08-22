@@ -189,6 +189,8 @@ void loop()
       check_Serial_cmd(cmd);
     }
   }
+  if (EconfigRX.receiveData()) // receive configuration from CSB
+  checkCSB(&configRX);
 }
 
 /**
@@ -531,15 +533,19 @@ void checkCSB(cmd_t *c)
       //   break;
 
     case cmd_get_data:
-      // EasyTransfer dtx;
-      // uint8_t *data = nullptr;
-      // if(cd.sensor_Type == 0)
-      //   data = new uint8_t [44];
-      // else
-      //   data = new uint8_t [14*6];
-      // dtx.begin(details(data), &CSB_Serial); // begin EasyTransfer object to send data to CSB
-      // dtx.sendData();                        // send data to CSB
+    {
+      EasyTransfer dtx;
+      uint8_t *data = nullptr;
+      if(cd.sensor_Type == 0)
+        data = new uint8_t [44];
+      else
+        data = new uint8_t [14*6];
+      dtx.begin(details(data), &CSB_Serial); // begin EasyTransfer object to send data to CSB
+      dtx.sendData();                        // send data to CSB
+      // Optionally free memory if needed:
+      delete[] data;
       break;
+    }
 
     case cmd_get_config:
       EstatTX.sendData(); // send configuration data to CSB
