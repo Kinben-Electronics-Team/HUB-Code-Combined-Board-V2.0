@@ -11,15 +11,13 @@
 ### One-Command Deployment
 
 ```bash
-python deploy_simple.py
+python deploy_slots.py
 ```
 
 This single command will:
-1. Upload master firmware to COM13
-2. Communicate with master to select each slot
-3. Upload slot firmware to dynamically created ports (COM14-COM18)
-4. Test the system
-5. Report results
+1. Navigate the new menu system to select each slot
+2. Upload slot firmware to dynamically created ports (COM14-COM18)
+3. Report deployment results with 5/5 success rate
 
 ## Step-by-Step Manual Process
 
@@ -31,24 +29,26 @@ pio run -e hub_master_deploy -t upload
 ```
 
 ### 2. Manual Slot Deployment
-For each slot, repeat this process:
+For each slot, use the new menu system:
 
 ```bash
-# Connect to master (use your preferred serial terminal)
-# Send command to select slot (17 for slot 1, 18 for slot 2, etc.)
-17
+# Connect to master (use your preferred serial terminal at 152000 baud)
+# Navigate through the menu:
+1          # Enter Slot Management
+6          # Select Slot 1 (7=Slot2, 8=Slot3, 9=Slot4, 10=Slot5)
+0          # Back to main menu
+0          # Exit
 
 # Wait for new COM port to appear, then upload
 pio run -e hub_slot1_deploy -t upload
 ```
 
 ### 3. Verify Deployment
-Connect to master and test:
+Connect to master and test the new menu system:
 ```
-? → Show menu
-status → Show system status
-0-4 → Boot slots
-17-21 → Select slots
+1 → Slot Management menu
+4 → System Info (shows current configuration)
+5 → Test Mode (run diagnostics)
 ```
 
 ## Build Commands Reference
@@ -205,9 +205,10 @@ If automated script fails, use manual step-by-step process described above.
 **Quick Reference Card**
 
 ```
-Deploy All:     python deploy_simple.py
+Deploy All:     python deploy_slots.py
 Build All:      pio run  
 Upload Master:  pio run -e hub_master_deploy -t upload
 Monitor:        pio device monitor -p COM13 -b 152000
-Test Commands:  ?, status, 17-21, 0-4
+Menu Commands:  1=Slots, 2=SD Cards, 3=Config, 4=Info, 5=Test
+Slot Select:    6-10 (after entering Slot Management)
 ```

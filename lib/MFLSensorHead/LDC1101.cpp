@@ -1234,7 +1234,11 @@ void Sensors::livereadMFL(uint8_t Channel, bool special32bitEN)
     {
         SR->ShiftCS();
         uint32_t ldcValue = liveReadLDC();
-        debug.printf("║  LDC %d │ %10lu │ [", i, ldcValue);
+        debug.print("║  LDC ");
+        debug.print(i);
+        debug.print(" │ ");
+        debug.print(ldcValue);
+        debug.print(" │ [");
         
         // Visual bar representation
         int barLength = (ldcValue % 1000) / 50; // Scale for visual bar
@@ -1253,14 +1257,18 @@ void Sensors::livereadMFL(uint8_t Channel, bool special32bitEN)
     for (int i = 0; i < numTMAG; i++)
     {
         SR->ShiftCS();
-        debug.printf("║  TMAG %d │ ", i);
+        debug.print("║  TMAG ");
+        debug.print(i);
+        debug.print(" │ ");
         LiveReadTMAGFormatted(Channel, special32bitEN);
         debug.println(" ║");
     }
     
     SR->High_all_CS();
     debug.println("╚═══════════════════════════════════════════════════════════════════╝");
-    debug.printf("║ Timestamp: %10lu ms                                       ║\n", millis());
+    debug.print("║ Timestamp: ");
+    debug.print(millis());
+    debug.println(" ms                                       ║");
     debug.println("╚═══════════════════════════════════════════════════════════════════╝");
     _myspi->endTransaction();
 }
@@ -1324,7 +1332,9 @@ void Sensors::liveReadEGP(uint8_t Channel, bool special32bitEN)
     
     for (int i = 0; i < totalTMAG5170; i++)
     {
-        debug.printf("║ TMAG%-2d │", i);
+        debug.print("║ TMAG");
+        debug.print(i);
+        debug.print(" │");
         
         if (i % 4 == 0) // Angle sensor
         {
@@ -1335,7 +1345,9 @@ void Sensors::liveReadEGP(uint8_t Channel, bool special32bitEN)
             SR->ShiftCS();
             
             float angleVal = liveReadAngle();
-            debug.printf(" Angle      │ %8.2f°          │", angleVal);
+            debug.print(" Angle      │ ");
+            debug.print(angleVal, 2);
+            debug.print("°          │");
             
             // Status indicator for angle
             if (angleVal > 300 || angleVal < 60) {
@@ -1364,7 +1376,8 @@ void Sensors::liveReadEGP(uint8_t Channel, bool special32bitEN)
             sensorVal = _myspi->transfer16(0x00);
             actualVal = (float)sensorVal * 150 / 32768;
             
-            debug.printf("%7.2f mT        │", actualVal);
+            debug.print(actualVal, 2);
+            debug.print(" mT        │");
             
             // Status indicator
             if (abs(actualVal) > 50) {
@@ -1392,7 +1405,11 @@ void Sensors::liveReadEGP(uint8_t Channel, bool special32bitEN)
     }
     
     debug.println("╚══════════════════════════════════════════════════════════════════════╝");
-    debug.printf("║ Timestamp: %10lu ms │ Total Sensors: %2d                      ║\n", millis(), totalTMAG5170);
+    debug.print("║ Timestamp: ");
+    debug.print(millis());
+    debug.print(" ms │ Total Sensors: ");
+    debug.print(totalTMAG5170);
+    debug.println("                      ║");
     debug.println("╚══════════════════════════════════════════════════════════════════════╝");
     
     SR->ShiftCS();
@@ -1459,7 +1476,11 @@ void Sensors::LiveReadTMAGFormatted(uint8_t Channel, bool special32bitEN)
         float xVal = (float)c.sint[0] * 150 / 32768;
         float yVal = (float)c.sint[1] * 150 / 32768;
         
-        debug.printf("X: %7.2f mT │ Y: %7.2f mT │", xVal, yVal);
+        debug.print("X: ");
+        debug.print(xVal, 2);
+        debug.print(" mT │ Y: ");
+        debug.print(yVal, 2);
+        debug.print(" mT │");
         
         // Status indicator
         if (abs(xVal) > 50 || abs(yVal) > 50) {
@@ -1479,7 +1500,9 @@ void Sensors::LiveReadTMAGFormatted(uint8_t Channel, bool special32bitEN)
         if (actualVal > thxHiLimit || actualVal < thxLoLimit)
             thxStat |= 0x1;
             
-        debug.printf("Value: %7.2f mT │", actualVal);
+        debug.print("Value: ");
+        debug.print(actualVal, 2);
+        debug.print(" mT │");
         
         // Status indicator with color
         if (abs(actualVal) > thxHiLimit) {
