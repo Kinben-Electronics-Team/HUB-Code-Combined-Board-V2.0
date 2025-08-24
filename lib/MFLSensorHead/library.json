@@ -1,0 +1,20 @@
+{
+  "name": "MFLSensorHead",
+  "version": "1.0.0",
+  "description": "MFL Sensor Head library with LDC1101, TMAG5170, and Sensors classes",
+  "keywords": "sensor, ldc, tmag, mfl",
+  "authors":
+  {
+    "name": "Kinben Electronics"
+  },
+  "repository":
+  {
+    "type": "git",
+    "url": ""
+  },
+  "frameworks": "arduino",
+  "platforms": "raspberrypi",
+  "dependencies": {
+    "shift_register": "*"
+  }
+}

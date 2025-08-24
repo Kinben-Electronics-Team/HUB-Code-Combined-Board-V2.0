@@ -1,0 +1,17 @@
+{
+  "name": "shift_register",
+  "version": "1.0.0",
+  "description": "ShiftRegister library for LVC595 shift registers",
+  "keywords": "shift register, 74hc595, lvc595",
+  "authors":
+  {
+    "name": "Kinben Electronics"
+  },
+  "repository":
+  {
+    "type": "git",
+    "url": ""
+  },
+  "frameworks": "arduino",
+  "platforms": "raspberrypi"
+}

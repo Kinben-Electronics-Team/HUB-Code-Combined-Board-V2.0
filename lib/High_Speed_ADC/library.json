@@ -1,0 +1,17 @@
+{
+  "name": "High_Speed_ADC",
+  "version": "1.0.0",
+  "description": "High Speed ADC library",
+  "keywords": "adc, high speed",
+  "authors":
+  {
+    "name": "Kinben Electronics"
+  },
+  "repository":
+  {
+    "type": "git",
+    "url": ""
+  },
+  "frameworks": "arduino",
+  "platforms": "raspberrypi"
+}

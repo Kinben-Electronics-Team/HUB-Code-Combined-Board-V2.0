@@ -1,0 +1,17 @@
+{
+  "name": "IOEX",
+  "version": "1.0.0",
+  "description": "MyI2CDevice library for I2C IO Expander",
+  "keywords": "i2c, io expander",
+  "authors":
+  {
+    "name": "Kinben Electronics"
+  },
+  "repository":
+  {
+    "type": "git",
+    "url": ""
+  },
+  "frameworks": "arduino",
+  "platforms": "raspberrypi"
+}
