@@ -1,6 +1,11 @@
 #ifdef BUILD_SLOT
 #include "function.h"
 
+// Beta feature: Sample count debugging
+bool beta_sample_debug = true; // Enable sample count debugging
+uint64_t last_received_sample = 0;
+unsigned long sample_receive_count = 0;
+
 /*varible for psram*/
 psram_spi_inst_t psram_spi = psram_spi_init(pio0, -1, false);
 
@@ -36,10 +41,38 @@ void setup_slot()
 
     pinMode(SD_SW_pin, OUTPUT);
     digitalWrite(SD_SW_pin, LOW);                // CONNECT SD CARD TO uC
+    
+    Serial.println("Requesting SD card initialization...");
     rp2040.fifo.push_nb(MOUNT_SD);               // mount sd card
-    delay(2000);                                 // wait for sd card to initialise
+
+    // Wait for Core 1 to acknowledge SD initialization
+    uint32_t timeout = millis() + 10000; // 10 second timeout
+    bool sdInitialized = false;
+    
+    Serial.println("Waiting for SD initialization...");
+    while (millis() < timeout && !sdInitialized) {
+        if (rp2040.fifo.available()) {
+            uint32_t response = rp2040.fifo.pop();
+            if (response == MOUNT_SD_ACK) {
+                sdInitialized = true;
+                Serial.println("SD card initialized successfully!");
+            } else {
+                // Put other FIFO messages back for later processing
+                rp2040.fifo.push_nb(response);
+                Serial.printf("Got FIFO message: %lu (not SD ACK)\n", response);
+            }
+        }
+        delay(10); // Small delay to prevent busy waiting
+    }
+    
+    if (!sdInitialized) {
+        Serial.println("ERROR: SD card initialization timeout!");
+        Serial.println("Continuing with setup but SD may not work...");
+    }
+
     EscRX.begin(details(core.sc), &MSTR_Serial); // begin EasyTransfer for receiving data from master
     rp2040.wdt_begin(WDT_RESET_TIME);            // start watchdog timer
+    Serial.println("Setup complete");
 }
 
 void loop_slot()
@@ -51,12 +84,28 @@ void loop_slot()
         {
             trig_status = 0;     // reset trigger flag
             EscRX.receiveData(); // receive data from master
+            
+            // CLEAN: Only track sample count for post-acquisition statistics
+            if (beta_sample_debug && core.sc != last_received_sample) {
+                sample_receive_count++;
+                last_received_sample = core.sc;
+            }
+            
             core.get_data();     // get data from sensor and log into psram
         }
     }
 
     else
     {
+        // Beta feature: Display sample count statistics (non-intrusive)
+        static unsigned long last_stats_time = 0;
+        if (beta_sample_debug && millis() - last_stats_time > 5000) { // Every 5 seconds
+            if (sample_receive_count > 0) {
+                Serial.printf("BETA Stats: Last sample ID: %llu, Total received: %lu\n", 
+                             last_received_sample, sample_receive_count);
+            }
+            last_stats_time = millis();
+        }
 
         if (wire_received)
         {
@@ -85,6 +134,27 @@ void setup1_slot()
 {
     pinMode(SD_VCC_EN_pin, OUTPUT);
     digitalWrite(SD_VCC_EN_pin, HIGH); // power on sd card
+    
+    // Process any pending FIFO messages during setup
+    delay(100); // Let Core 0 send MOUNT_SD
+    
+    // Check for MOUNT_SD during setup phase
+    Serial.println("Core 1 setup checking for MOUNT_SD...");
+    if (rp2040.fifo.available()) {
+        uint32_t cmd = rp2040.fifo.pop();
+        if (cmd == MOUNT_SD) {
+            Serial.println("Processing early SD mount request");
+            l.sd_card_init();
+            rp2040.fifo.push_nb(MOUNT_SD_ACK);
+            Serial.println("SD initialization complete, ACK sent");
+        } else {
+            // Put it back for loop processing
+            rp2040.fifo.push_nb(cmd);
+            Serial.printf("Got non-MOUNT_SD command in setup1: %lu\n", cmd);
+        }
+    } else {
+        Serial.println("No FIFO messages in Core 1 setup");
+    }
 }
 
 void loop1_slot()

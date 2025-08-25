@@ -32,6 +32,10 @@ volatile bool Trig_stat = 0;
 cmd_t configRX; // struct to receive data from CSB
 configData cd;  // struct to store configuration data
 uint32_t dummy_log_freq = 1000; // Default dummy logging frequency in Hz
+bool dummy_logging_active = false; // Track if dummy logging is active
+uint64_t dummy_sample_count = 0; // Sample count for dummy logging
+unsigned long last_dummy_trigger_time = 0; // Last time we sent a dummy trigger
+uint32_t dummy_trigger_interval = 1000; // Interval in microseconds (will be calculated from frequency)
 
 EasyTransfer EscRX, // EasyTransfer object to get sample count from CSB
     EconfigRX,      // EasyTransfer object to get Cofiguration from CSB
@@ -196,6 +200,20 @@ void loop_master()
   }
   else // other mode
   {
+    // Handle dummy logging sample count transmission (CLEAN - no prints)
+    if (dummy_logging_active)
+    {
+      unsigned long current_time = micros();
+      if (current_time - last_dummy_trigger_time >= dummy_trigger_interval)
+      {
+        // Update sample count and send to slots
+        dummy_sample_count++;
+        sc = dummy_sample_count; // Update the global sample count variable
+        EscTX.sendData(); // Send sample count to slots
+        last_dummy_trigger_time = current_time;
+      }
+    }
+    
     if (Serial.available())
     {
       processMenuInput();
@@ -373,6 +391,12 @@ void check_Serial_cmd(uint8_t cmd)
     delay(1000);                       // Wait for 1 second
     analogWriteFreq(dummy_log_freq);   // Set PWM frequency to configured frequency
     analogWrite(SLOT_TRIG_pin, 128);   // Set 50% duty cycle
+    
+    // Initialize dummy logging variables (CLEAN)
+    dummy_logging_active = true;
+    dummy_sample_count = 0;
+    dummy_trigger_interval = 1000000 / dummy_log_freq; // Convert Hz to microseconds interval
+    last_dummy_trigger_time = micros();
 
     break;
 
@@ -381,6 +405,9 @@ void check_Serial_cmd(uint8_t cmd)
     Serial.println("Dummy logging ended");
     digitalWrite(SLOT_MODE_pin, LOW); // Set slot mode to other
     analogWrite(SLOT_TRIG_pin, 0);    // Set duty cycle to 0%
+    
+    // Stop dummy logging (CLEAN)
+    dummy_logging_active = false;
     break;
 
   default:
@@ -786,11 +813,14 @@ void displaySubMenu()
       Serial.println("║                      TEST MODE                          ║");
       Serial.println("╠══════════════════════════════════════════════════════════╣");
       Serial.printf("║  Current Logging Frequency: %-6u Hz                      ║", dummy_log_freq);
+      Serial.printf("║  Dummy Logging Status: %-8s  Sample Count: %-10llu ║", 
+                    dummy_logging_active ? "ACTIVE" : "STOPPED", dummy_sample_count);
       Serial.println("║                                                          ║");
       Serial.println("║  1. Start Dummy Logging                                 ║");
       Serial.println("║  2. Stop Dummy Logging                                  ║");
       Serial.println("║  3. Test All Slots                                      ║");
       Serial.println("║  4. Set Logging Frequency                               ║");
+      Serial.println("║  5. Reset Sample Counter                                ║");
       Serial.println("║                                                          ║");
       Serial.println("║  0. Back to main menu                                   ║");
       Serial.println("║                                                          ║");
@@ -895,10 +925,10 @@ void processSubMenuInput(int cmd)
       break;
       
     case 5: // Test Mode
-      if (isValidInput(cmd, 1, 4)) {
+      if (isValidInput(cmd, 1, 5)) {
         processTestCommand(cmd);
       } else {
-        Serial.println("\n❌ ERROR: Invalid option! Please select 0-4.");
+        Serial.println("\n❌ ERROR: Invalid option! Please select 0-5.");
         displaySubMenu();
       }
       break;
@@ -1079,9 +1109,39 @@ void processTestCommand(int cmd)
         
         if(newFreq >= 1 && newFreq <= 100000) {
           dummy_log_freq = newFreq;
+          
+          // Update interval if dummy logging is currently active
+          if(dummy_logging_active) {
+            dummy_trigger_interval = 1000000 / dummy_log_freq;
+            analogWriteFreq(dummy_log_freq); // Update PWM frequency as well
+          }
           Serial.printf("✅ Logging frequency set to: %u Hz\n", dummy_log_freq);
         } else {
           Serial.println("❌ Invalid frequency! Must be between 1-100000 Hz");
+        }
+      }
+      break;
+    case 5:
+      {
+        Serial.println("🔄 Reset Sample Counter");
+        Serial.printf("Current sample count: %llu\n", dummy_sample_count);
+        Serial.print("Reset sample counter to 0? (y/n): ");
+        
+        // Wait for user input
+        while(!Serial.available()) {
+          delay(10);
+        }
+        
+        String input = Serial.readStringUntil('\n');
+        input.trim();
+        input.toLowerCase();
+        
+        if(input == "y" || input == "yes") {
+          dummy_sample_count = 0;
+          sc = 0;
+          Serial.println("✅ Sample counter reset to 0");
+        } else {
+          Serial.println("❌ Sample counter reset cancelled");
         }
       }
       break;

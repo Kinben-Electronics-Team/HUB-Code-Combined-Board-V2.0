@@ -101,6 +101,7 @@
 #define UPDATE_HID 11      // cmd to update HID
 #define HEALTH_FLAG 12     // cmd to reset watchdog timer
 #define RESET_WDT_EVENT 23 // cmd to reset watchdog timer
+#define MOUNT_SD_ACK 24    // ack flag for mount sd command received - BETA ADDITION
 
 #define SIDadd 0
 #define HIDadd 1
