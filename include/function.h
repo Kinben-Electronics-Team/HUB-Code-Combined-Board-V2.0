@@ -243,6 +243,12 @@ public:
      */
     bool getSDCardStatus() { return sd_con_stat; }
 
+    /**
+     * @brief Set SD card connection status
+     * @param status true if SD card is connected, false otherwise
+     */
+    void setSDCardStatus(bool status) { sd_con_stat = status; }
+
 private:
     Sensors *sensor;
     psram_spi_inst_t *psram_spi;

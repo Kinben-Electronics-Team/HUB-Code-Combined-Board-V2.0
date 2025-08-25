@@ -1,6 +1,9 @@
 #ifdef BUILD_SLOT
 #include "function.h"
 
+// External reference to the global core instance for SD status management
+extern Acquire core;
+
 uint8_t SID = 0, HID = 0;
 Adafruit_NeoPixel pixels(1, LED_pin, NEO_GRB + NEO_KHZ800);
 
@@ -32,6 +35,7 @@ void Logging::sd_card_init()
     else
     {
         Serial.println("Card successfully initialized.");
+        core.setSDCardStatus(true);  // Set SD card status to connected
         getFilename();
         while (f->open(filename, O_RDONLY))
         {
