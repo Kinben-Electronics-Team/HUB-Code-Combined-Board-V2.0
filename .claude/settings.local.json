@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(~/.platformio/penv/Scripts/pio run --list-targets)",
+      "Bash(pio run:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(copy includehub_master.h ..include)",
+      "Bash(pio device monitor:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -1,0 +1,23 @@
+GPIO,Pin Name,Direction,Function,Safe Init State,Notes
+1,SD_SW_pin,OUTPUT,SD card switch,LOW (disconnected),HIGH connects to reader
+2,SD_CLK_pin,SD,SD card clock,SD interface,
+3,SD_CMD_pin,SD,SD card command,SD interface,
+4,SD_D0_pin,SD,SD card data 0,SD interface,
+5,SD_D1_pin,SD,SD card data 1,SD interface,
+6,SD_D2_pin,SD,SD card data 2,SD interface,
+7,SD_D3_pin,SD,SD card data 3,SD interface,
+8,SD_VCC_EN_pin,OUTPUT,SD card power from Slot 3.3V,LOW (OFF),Critical - Switches ON/OFF the SLOT Supply to the SD Card POWER MUX
+9,SENSOR_PS_EN_pin,OUTPUT,Sensor power,LOW (OFF),Critical - sensor power SUPPLY SWITCH can be off to save power when not talking to sensors but should remain on during acq continuously.
+10,SPI_SCK_PIN,SPI,SPI clock,SPI,SPI1
+11,SPI_MOSI_PIN,SPI,SPI MOSI,SPI,SPI1
+12,SPI_MISO_PIN,SPI,SPI MISO,SPI,SPI1
+13,SRDA_pin,OUTPUT,Shift register data,LOW,"This is Serial data to shift registers for sensor chip select. Send bit stream sequentially to switch on CS of each sensor connected to SPI1. Only 1 sensor CS should be low at a time."
+14,STCLK_pin,OUTPUT,Shift register storage clock,LOW,"Storage clock pin of the SR flip-flops, the outputs are set with this edge."
+15,LED_pin,OUTPUT,NeoPixel LED,LOW,WS2812B control
+16,Tx_Data_pin,OUTPUT,TX to Master,LOW,"Serial TX to the master, this line is shared by all slots so only send when master selects slot with the I2C_IO line."
+17,Rx_Data_pin,INPUT,RX from Master,INPUT,"Serial RX from the master, master can broadcast messages here but you should only listen if your ID is mentioned in the broadcast or if its on broadcast address or if master is addressing you with the I2C_IO pin."
+18,MODE_pin,INPUT,Mode selection,INPUT_PULLUP,Digital Pin from master to inform MODE change/selection
+19,I2C_IO_pin,INPUT,Selection from Master,INPUT_PULLUP,"Addressing pin which master uses to select a particular slot using both I2C or serial. When LOW, this slot is selected. This helps isolating one device to communicate to in cases where the IDs have not been assigned or when the system is in a mode where I2C and serial polling is not expected."
+20,SDA_pin,I2C,I2C data,I2C,Wire SDA from Master and shared among all slots
+21,SCL_pin,I2C,I2C clock,I2C,Wire SCL from Master and shared among all slots
+26,TRIG_pin,INPUT,Trigger input,INPUT_PULLUP,Digital trigger signal from master to trigger acquisition or other tasks in other modes.

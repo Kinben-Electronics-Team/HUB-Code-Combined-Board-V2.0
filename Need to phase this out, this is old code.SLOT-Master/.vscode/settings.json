@@ -1,0 +1,15 @@
+{
+    "files.associations": {
+        "*.tcc": "cpp",
+        "memory_resource": "cpp",
+        "new": "cpp",
+        "ostream": "cpp",
+        "streambuf": "cpp",
+        "sd_card.h": "c",
+        "stdio.h": "c",
+        "datetime.h": "c",
+        "aon_timer.h": "c",
+        "my_rtc.h": "c",
+        "charconv": "cpp"
+    }
+}

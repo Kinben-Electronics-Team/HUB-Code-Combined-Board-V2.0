@@ -1,0 +1,24 @@
+Things to write on EEPROM
+2. EGP or MFL - default EGP
+3. angle sensor high and low average value
+4. number of sample for averaging angle sensor value - max 25
+
+Things to configure via I2C
+1. HID SID
+2. EGP or MFL
+3. Number of EGP sensor 
+4. axis for angle calculation
+5. number of sample for averaging angle sensor value
+6. axis for magnetic sensor
+
+/*this cannot be done until SID is set*/
+Things master will request 
+1. sensor data - numEGP*14 or 44 bytes(for MFL)
+2. configurable thigs 
+3. test report for diagnosis mode
+
+Things to diagnosis
+1. sd card write - test_sd_card()
+2. psram test - read write time - test_psram()
+3. sensors - restart sensor and call checkSensors() 
+

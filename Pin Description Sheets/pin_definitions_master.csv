@@ -1,0 +1,43 @@
+GPIO,Pin Name,Direction,Function,Safe Init State,Notes
+0,DATA_TX_pin,OUTPUT,TX to CSB,LOW,Serial TX
+1,DATA_RX_pin,INPUT,RX from CSB,INPUT,Serial RX
+2,TX_EN_pin,OUTPUT,Enable TX to CSB,LOW (disabled),Serial1 TX Enable
+3,MODE_pin,INPUT,Mode selection from CSB,INPUT_PULLUP,Digital Signal for selecting Mode
+4,TRIG_pin,INPUT,Trigger from CSB,INPUT_PULLUP,Digital Signal for Triggering ACQ or other func in other modes
+6,IOEX_SDA_pin,I2C,IO Expander data,I2C,Wire1 SDA
+7,IOEX_SCL_pin,I2C,IO Expander clock,I2C,Wire1 SCL
+8,SLOT_TX_pin,OUTPUT,TX to Slots,LOW,Serial1 TX
+9,SLOT_RX_pin,INPUT,RX from Slots,INPUT,Serial1 RX
+10,SENSOR_SUPPLY_SEL0,OUTPUT,Sensor-Power-MUX select control,LOW,"Always keep LOW for proper power control. Works with SEL1 for mode selection"
+11,MUX_C2_pin,OUTPUT,USB MUX channel select bit 2,LOW,
+12,MUX_C1_pin,OUTPUT,USB MUX channel select bit 1,LOW,
+13,MUX_C0_pin,OUTPUT,USB MUX channel select bit 0,LOW,
+14,MUX_EN_pin,OUTPUT,USB MUX enable,HIGH (disabled),Critical - LOW enables MUX
+15,SENSOR_SUPPLY_SEL1,OUTPUT,5V buck enable/mode select,LOW (3.3V mode),"LOW = 3.3V MFL mode, HIGH = 5V EGP mode when SEL0=LOW"
+16,IOEX_INT_pin,INPUT,IO Expander interrupt,INPUT_PULLUP,
+17,IOEX_RST_pin,OUTPUT,IO Expander reset,HIGH (not reset),
+18,SLOT_MODE_pin,OUTPUT,Slot board mode,LOW,Digital Signal for selecting Mode of Slots. Common to all slots
+19,SLOT_TRIG_pin,OUTPUT,Trigger to Slots,LOW,Digital Signal for Triggering ACQ or other func in other modes of slots. Common to all slots
+20,SLOT_I2C_SDA_pin,I2C,SLOT I2C data,I2C,Wire SDA
+21,SLOT_I2C_SCL_pin,I2C,SLOT I2C clock,I2C,Wire SCL
+22,LED_pin,OUTPUT,NeoPixel LED,LOW,WS2812B control
+28,SDCARD_HUB_DET_pin,OUTPUT,SD card detect EMULATION,HIGH (no detect),Drives SD Card Reader Detect pin to emulate that a Card has been inserted in the slot so it starts enumerating mass storage to PC.
+29,USB_RPBUS_PWR_pin,INPUT,USB power monitor,INPUT,"Monitor RPBUS power so when slots uc usbs are connected to the USB HUB plus card reader IC, through the muxes, it switches the uc power on and off based on this input from the HUB IC."
+,,,,,
+IOEX PINS (TCAL9539 at I2C 0x74),,,,,
+IOEX Pin,Function,Safe Init State,Notes,,
+P00,Slot5 Power Enable,HIGH (OFF),LOW enables slot power,,Power control active LOW
+P03,Slot4 Power Enable,HIGH (OFF),LOW enables slot power,,Power control active LOW
+P06,Slot3 Power Enable,HIGH (OFF),LOW enables slot power,,Power control active LOW
+P09,Slot2 Power Enable,HIGH (OFF),LOW enables slot power,,Power control active LOW
+P15,Slot1 Power Enable,HIGH (OFF),LOW enables slot power,,Power control active LOW
+P02,Slot5 Boot Control,HIGH (Normal),Boot control pin,,"Boot pin of RP2040, LOW = BOOTSEL mode"
+P05,Slot4 Boot Control,HIGH (Normal),Boot control pin,,"Boot pin of RP2040, LOW = BOOTSEL mode"
+P08,Slot3 Boot Control,HIGH (Normal),Boot control pin,,"Boot pin of RP2040, LOW = BOOTSEL mode"
+P11,Slot2 Boot Control,HIGH (Normal),Boot control pin,,"Boot pin of RP2040, LOW = BOOTSEL mode"
+P14,Slot1 Boot Control,HIGH (Normal),Boot control pin,,"Boot pin of RP2040, LOW = BOOTSEL mode"
+P01,Slot5 I2C/Serial Selection,HIGH (Not Selected),Selection pin,,"LOW = Selected for communication"
+P04,Slot4 I2C/Serial Selection,HIGH (Not Selected),Selection pin,,"LOW = Selected for communication"
+P07,Slot3 I2C/Serial Selection,HIGH (Not Selected),Selection pin,,"LOW = Selected for communication"
+P10,Slot2 I2C/Serial Selection,HIGH (Not Selected),Selection pin,,"LOW = Selected for communication"
+P13,Slot1 I2C/Serial Selection,HIGH (Not Selected),Selection pin,,"LOW = Selected for communication"
