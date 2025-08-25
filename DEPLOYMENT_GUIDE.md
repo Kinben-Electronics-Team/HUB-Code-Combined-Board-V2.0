@@ -8,16 +8,30 @@
 - pyserial library: `pip install pyserial`
 - Hardware connected and powered
 
-### One-Command Deployment
+## 🚀 CURRENT STATUS - WORKING DEPLOYMENT
 
+### ✅ What Works Right Now:
+
+#### Complete System Deployment (RECOMMENDED)
+```bash
+python deploy_complete_system.py
+```
+**Status**: ✅ WORKING - Uploads master + all 5 slots with beautiful progress bars
+**Time**: ~6-8 minutes total
+**Features**: Auto COM detection, progress animations, menu navigation
+
+#### Slot-Only Deployment  
 ```bash
 python deploy_slots.py
 ```
+**Status**: ✅ WORKING - Uses existing deployed menu system
+**Time**: ~5-6 minutes for all slots
 
-This single command will:
-1. Navigate the new menu system to select each slot
-2. Upload slot firmware to dynamically created ports (COM14-COM18)
-3. Report deployment results with 5/5 success rate
+#### Individual Slot Upload
+```bash
+pio run -e hub_slot1_deploy -t upload  # etc for slots 2-5
+```
+**Status**: ✅ WORKING - Manual slot-by-slot deployment
 
 ## Step-by-Step Manual Process
 
@@ -202,13 +216,34 @@ If automated script fails, use manual step-by-step process described above.
 
 ---
 
+## ⚠️ Known Issues (For Next Development Session)
+
+- **No feedback verification** - Scripts don't confirm menu commands worked
+- **No COM port detection** - Doesn't wait for slot ports to appear
+- **No upload validation** - Assumes uploads succeed without checking
+- **Sequential only** - Takes 6-8 minutes, could be faster with parallel uploads
+
+**Status**: System works but needs robustness improvements
+
+---
+
 **Quick Reference Card**
 
+```bash
+# WORKING DEPLOYMENTS:
+Complete System: python deploy_complete_system.py  # Master + All Slots
+Slots Only:      python deploy_slots.py            # Uses existing menu
+Individual:      pio run -e hub_master_deploy -t upload
+
+# MONITORING:
+Monitor Master:  pio device monitor -p COM13 -b 152000
+Build All:       pio run
+
+# ENHANCED MENU SYSTEM (DEPLOYED & WORKING):
+Main Menu:       1=Slots, 2=SD Cards, 3=Config, 4=Info, 5=Test  
+Slot Selection:  6=Slot1, 7=Slot2, 8=Slot3, 9=Slot4, 10=Slot5
 ```
-Deploy All:     python deploy_slots.py
-Build All:      pio run  
-Upload Master:  pio run -e hub_master_deploy -t upload
-Monitor:        pio device monitor -p COM13 -b 152000
-Menu Commands:  1=Slots, 2=SD Cards, 3=Config, 4=Info, 5=Test
-Slot Select:    6-10 (after entering Slot Management)
-```
+
+## 📋 For Next Claude Code Session
+
+See `CURRENT_STATUS.md` and `NEXT_STEPS.md` for complete current state and improvement priorities.

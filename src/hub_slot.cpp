@@ -70,7 +70,7 @@ void loop_slot()
 #else
         Sens.liveReadEGP();
 #endif
-        delay(500);
+        delay(100);
         rp2040.fifo.push_nb(HEALTH_FLAG); // push health flag to reset watchdog timer
     }
 }

@@ -1237,7 +1237,9 @@ void Sensors::livereadMFL(uint8_t Channel, bool special32bitEN)
         debug.print("║  LDC ");
         debug.print(i);
         debug.print(" │ ");
-        debug.print(ldcValue);
+        char ldcBuf[10];
+        sprintf(ldcBuf, "%8lu", ldcValue);  // Fixed width: 8 chars for LDC values
+        debug.print(ldcBuf);
         debug.print(" │ [");
         
         // Visual bar representation
@@ -1476,10 +1478,15 @@ void Sensors::LiveReadTMAGFormatted(uint8_t Channel, bool special32bitEN)
         float xVal = (float)c.sint[0] * 150 / 32768;
         float yVal = (float)c.sint[1] * 150 / 32768;
         
-        debug.print("X: ");
-        debug.print(xVal, 2);
-        debug.print(" mT │ Y: ");
-        debug.print(yVal, 2);
+        debug.print("X:");
+        if(xVal >= 0) debug.print(" ");  // Add space for positive numbers
+        char xBuf[8], yBuf[8];
+        sprintf(xBuf, "%6.2f", xVal);    // Fixed width: 6 chars, 2 decimals
+        debug.print(xBuf);
+        debug.print(" mT │ Y:");
+        if(yVal >= 0) debug.print(" ");  // Add space for positive numbers  
+        sprintf(yBuf, "%6.2f", yVal);    // Fixed width: 6 chars, 2 decimals
+        debug.print(yBuf);
         debug.print(" mT │");
         
         // Status indicator

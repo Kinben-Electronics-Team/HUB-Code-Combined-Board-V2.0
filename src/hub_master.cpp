@@ -919,13 +919,64 @@ void processConfigCommand(int cmd)
   Serial.println();
   switch(cmd) {
     case 1:
-      Serial.println("🔧 Configuring HID...");
-      check_Serial_cmd(config_hid);
+      {
+        Serial.println("🔧 Configure HID (Hub ID)");
+        Serial.printf("Current HID: %d\n", cd.hid);
+        Serial.print("Enter new HID (1-32): ");
+        
+        // Wait for user input
+        while(!Serial.available()) {
+          delay(10);
+        }
+        
+        String input = Serial.readStringUntil('\n');
+        input.trim();
+        int newHID = input.toInt();
+        
+        if(newHID >= 1 && newHID <= 32) {
+          cd.hid = newHID;
+          EEPROM.put(set_hid, cd.hid);
+          EEPROM.commit();
+          Serial.printf("✅ HID set to: %d\n", cd.hid);
+          
+          // Broadcast new HID to all slots
+          check_Serial_cmd(config_hid);
+          Serial.println("📡 HID broadcasted to all slots");
+        } else {
+          Serial.println("❌ Invalid HID! Must be between 1-32");
+        }
+      }
       break;
+      
     case 2:
-      Serial.println("🔧 Configuring SID...");
-      check_Serial_cmd(config_sid);
+      {
+        Serial.println("🔧 Configure SID (Slot IDs) - Auto Assignment");
+        Serial.println("This will assign SID 1-5 to all connected slots...");
+        Serial.print("Continue? (y/n): ");
+        
+        while(!Serial.available()) {
+          delay(10);
+        }
+        
+        String input = Serial.readStringUntil('\n');
+        input.trim();
+        input.toLowerCase();
+        
+        if(input == "y" || input == "yes") {
+          Serial.println("📡 Assigning SIDs to slots...");
+          check_Serial_cmd(config_sid);
+          Serial.println("✅ SID configuration completed!");
+          Serial.println("   Slot 1 → SID 1");
+          Serial.println("   Slot 2 → SID 2");
+          Serial.println("   Slot 3 → SID 3");
+          Serial.println("   Slot 4 → SID 4");
+          Serial.println("   Slot 5 → SID 5");
+        } else {
+          Serial.println("❌ SID configuration cancelled");
+        }
+      }
       break;
+      
     case 3:
       Serial.println("🧭 Magnetic Axis configuration not yet implemented.");
       break;
@@ -933,7 +984,11 @@ void processConfigCommand(int cmd)
       Serial.println("📐 Angular Axis configuration not yet implemented.");
       break;
   }
-  Serial.println("✅ Command executed successfully!\n");
+  Serial.println("\nPress any key to continue...");
+  while(!Serial.available()) {
+    delay(10);
+  }
+  Serial.readStringUntil('\n'); // Clear buffer
   displaySubMenu();
 }
 

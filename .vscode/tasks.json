@@ -1,0 +1,91 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "🚀 Deploy Complete HUB System",
+            "type": "shell",
+            "command": "cmd",
+            "args": ["/c", "python", "deploy_complete_system.py"],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "new"
+            },
+            "problemMatcher": [],
+            "detail": "Deploy Master + All 5 Slots automatically with progress",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "PATH": "${env:USERPROFILE}\\.platformio\\penv\\Scripts;${env:PATH}"
+                }
+            }
+        },
+        {
+            "label": "⚡ PlatformIO: Deploy All Systems",
+            "type": "shell",
+            "command": "pio",
+            "args": ["run", "-e", "deploy_all_systems"],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "new"
+            },
+            "problemMatcher": [],
+            "detail": "Deploy via PlatformIO environment"
+        },
+        {
+            "label": "🎯 Quick Deploy (Default)",
+            "type": "shell", 
+            "command": "cmd",
+            "args": ["/c", "python", "deploy_complete_system.py"],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "new"
+            },
+            "problemMatcher": [],
+            "detail": "Quick deployment - uses PlatformIO Python environment",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "PATH": "${env:USERPROFILE}\\.platformio\\penv\\Scripts;${env:PATH}"
+                }
+            }
+        },
+        {
+            "label": "🔥 Deploy HUB System (Batch)",
+            "type": "shell", 
+            "command": "deploy_from_vscode.bat",
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "new"
+            },
+            "problemMatcher": [],
+            "detail": "Deployment via batch file - guaranteed PlatformIO environment",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        }
+    ]
+}

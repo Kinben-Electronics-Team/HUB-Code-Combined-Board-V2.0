@@ -13,7 +13,7 @@
 #include <EasyTransfer.h>
 #include <common_config.h>
 
-#define BAUDRATE 115200 // serial port baudrate
+#define BAUDRATE 230400 // serial port baudrate (2x 115200)
 
 #define LOG_BUFF_SIZE 32 * 1024             // number of bytes to be logged into sd card at once
 #define FILE_SIZE_LIMIT (128 * 1024 * 1024) // size of each file
