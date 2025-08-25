@@ -237,6 +237,12 @@ public:
      * */
     void ExecuteWireCmd(uint8_t cmd, uint8_t data = 0);
 
+    /**
+     * @brief Get SD card connection status
+     * @return true if SD card is connected to card reader, false otherwise
+     */
+    bool getSDCardStatus() { return sd_con_stat; }
+
 private:
     Sensors *sensor;
     psram_spi_inst_t *psram_spi;

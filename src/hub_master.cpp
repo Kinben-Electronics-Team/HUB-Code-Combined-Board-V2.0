@@ -21,12 +21,17 @@ void processSDCommand(int cmd);
 void processConfigCommand(int cmd);
 void processTestCommand(int cmd);
 bool isValidInput(int input, int minVal, int maxVal);
+void powerOnSlot(slot_t slot);
+void powerOffSlot(slot_t slot);
+bool getSlotPowerStatus(slot_t slot);
+void displaySlotStatus();
 
 bool mode_stat = OTHER_MODE, current_mode = 0;
 volatile bool Trig_stat = 0;
 
 cmd_t configRX; // struct to receive data from CSB
 configData cd;  // struct to store configuration data
+uint32_t dummy_log_freq = 1000; // Default dummy logging frequency in Hz
 
 EasyTransfer EscRX, // EasyTransfer object to get sample count from CSB
     EconfigRX,      // EasyTransfer object to get Cofiguration from CSB
@@ -363,10 +368,10 @@ void check_Serial_cmd(uint8_t cmd)
 
   case dummy_log_start:
     // Code to start dummy logging (needs to be defined)
-    Serial.println("Dummy logging started");
+    Serial.printf("Dummy logging started at %u Hz\n", dummy_log_freq);
     digitalWrite(SLOT_MODE_pin, HIGH); // Set slot mode to logging
     delay(1000);                       // Wait for 1 second
-    analogWriteFreq(1000);             // Set PWM frequency to 1kHz
+    analogWriteFreq(dummy_log_freq);   // Set PWM frequency to configured frequency
     analogWrite(SLOT_TRIG_pin, 128);   // Set 50% duty cycle
 
     break;
@@ -666,12 +671,15 @@ void displayMainMenu()
   Serial.println("╔══════════════════════════════════════════════════════════╗");
   Serial.println("║                    HUB MASTER CONTROL                   ║");
   Serial.println("╠══════════════════════════════════════════════════════════╣");
+  Serial.println("║                                                          ║");
   Serial.println("║  1. Slot Management                                      ║");
   Serial.println("║  2. SD Card Management                                   ║");
   Serial.println("║  3. Configuration                                        ║");
   Serial.println("║  4. System Info                                          ║");
   Serial.println("║  5. Test Mode                                            ║");
+  Serial.println("║                                                          ║");
   Serial.println("║  0. Exit                                                 ║");
+  Serial.println("║                                                          ║");
   Serial.println("╚══════════════════════════════════════════════════════════╝");
   Serial.print("Select option (0-5): ");
 }
@@ -688,13 +696,20 @@ void displaySubMenu()
       Serial.println("╔══════════════════════════════════════════════════════════╗");
       Serial.println("║                   SLOT MANAGEMENT                       ║");
       Serial.println("╠══════════════════════════════════════════════════════════╣");
-      Serial.println("║  Boot Slots:        │  Select Slots:                   ║");
-      Serial.println("║  1. Boot Slot 1     │  6. Select Slot 1                ║");
-      Serial.println("║  2. Boot Slot 2     │  7. Select Slot 2                ║");
-      Serial.println("║  3. Boot Slot 3     │  8. Select Slot 3                ║");
-      Serial.println("║  4. Boot Slot 4     │  9. Select Slot 4                ║");
-      Serial.println("║  5. Boot Slot 5     │  10. Select Slot 5               ║");
-      Serial.println("║                     │  11. Disconnect MUX              ║");
+      displaySlotStatus();
+      Serial.println("║                                                          ║");
+      Serial.println("║  Boot Slots:        │  Select Slots:    │ Power Control: ║");
+      Serial.println("║  1. Boot Slot 1     │  6. Select Slot 1 │ 12. Power ON 1 ║");
+      Serial.println("║  2. Boot Slot 2     │  7. Select Slot 2 │ 13. Power ON 2 ║");
+      Serial.println("║  3. Boot Slot 3     │  8. Select Slot 3 │ 14. Power ON 3 ║");
+      Serial.println("║  4. Boot Slot 4     │  9. Select Slot 4 │ 15. Power ON 4 ║");
+      Serial.println("║  5. Boot Slot 5     │ 10. Select Slot 5 │ 16. Power ON 5 ║");
+      Serial.println("║                     │ 11. Disconnect    │ 17. Power OFF1 ║");
+      Serial.println("║  22. Refresh Status │     MUX           │ 18. Power OFF2 ║");
+      Serial.println("║                     │                   │ 19. Power OFF3 ║");
+      Serial.println("║                     │                   │ 20. Power OFF4 ║");
+      Serial.println("║                     │                   │ 21. Power OFF5 ║");
+      Serial.println("║                                                          ║");
       Serial.println("║  0. Back to main menu                                   ║");
       Serial.println("╚══════════════════════════════════════════════════════════╝");
       break;
@@ -703,12 +718,14 @@ void displaySubMenu()
       Serial.println("╔══════════════════════════════════════════════════════════╗");
       Serial.println("║                  SD CARD MANAGEMENT                     ║");
       Serial.println("╠══════════════════════════════════════════════════════════╣");
+      Serial.println("║                                                          ║");
       Serial.println("║  Connect SD Cards:                                      ║");
       Serial.println("║  1. Connect Slot 1 SD    │  4. Connect Slot 4 SD        ║");
       Serial.println("║  2. Connect Slot 2 SD    │  5. Connect Slot 5 SD        ║");
       Serial.println("║  3. Connect Slot 3 SD    │  6. Disconnect All SD        ║");
       Serial.println("║                                                          ║");
       Serial.println("║  0. Back to main menu                                   ║");
+      Serial.println("║                                                          ║");
       Serial.println("╚══════════════════════════════════════════════════════════╝");
       break;
       
@@ -716,16 +733,24 @@ void displaySubMenu()
       Serial.println("╔══════════════════════════════════════════════════════════╗");
       Serial.println("║                    CONFIGURATION                        ║");
       Serial.println("╠══════════════════════════════════════════════════════════╣");
-      Serial.printf("║  Current HID: %3d                                        ║\n", cd.hid);
-      Serial.printf("║  Sensors: %3d     │  Sensor Type: %s                ║\n", 
-                    cd.ns, (cd.sensor_Type == SENSOR_TYPE_MFL) ? "MFL" : "EGP");
-      Serial.printf("║  Mag Axis: %2d     │  Ang Axis: %2d                     ║\n", 
-                    cd.mag_axis, cd.ang_axis);
+      Serial.println("║                                                          ║");
+      {
+        char configLine1[59], configLine2[59], configLine3[59];
+        snprintf(configLine1, sizeof(configLine1), "║  Current HID: %-3d                                        ║", cd.hid);
+        snprintf(configLine2, sizeof(configLine2), "║  Sensors: %-3d     │  Sensor Type: %-3s                ║", 
+                 cd.ns, (cd.sensor_Type == SENSOR_TYPE_MFL) ? "MFL" : "EGP");
+        snprintf(configLine3, sizeof(configLine3), "║  Mag Axis: %-2d     │  Ang Axis: %-2d                     ║", 
+                 cd.mag_axis, cd.ang_axis);
+        Serial.println(configLine1);
+        Serial.println(configLine2);
+        Serial.println(configLine3);
+      }
       Serial.println("║                                                          ║");
       Serial.println("║  1. Configure HID       │  3. Configure Mag Axis        ║");
       Serial.println("║  2. Configure SID       │  4. Configure Ang Axis        ║");
       Serial.println("║                                                          ║");
       Serial.println("║  0. Back to main menu                                   ║");
+      Serial.println("║                                                          ║");
       Serial.println("╚══════════════════════════════════════════════════════════╝");
       break;
       
@@ -733,17 +758,26 @@ void displaySubMenu()
       Serial.println("╔══════════════════════════════════════════════════════════╗");
       Serial.println("║                     SYSTEM INFO                         ║");
       Serial.println("╠══════════════════════════════════════════════════════════╣");
-      Serial.printf("║  Hub ID: %3d                                             ║\n", cd.hid);
-      Serial.printf("║  Number of Sensors: %3d                                  ║\n", cd.ns);
-      Serial.printf("║  Sensor Type: %s                                       ║\n", 
-                    (cd.sensor_Type == SENSOR_TYPE_MFL) ? "MFL (Magnetic Flux Leakage)" : "EGP (Eddy Current)");
-      Serial.printf("║  Magnetic Axis: %2d                                       ║\n", cd.mag_axis);
-      Serial.printf("║  Angular Axis: %2d                                        ║\n", cd.ang_axis);
-      Serial.printf("║  Current Mode: %s                                       ║\n", 
-                    mode_stat == ACQ_MODE ? "ACQUISITION" : "OTHER");
-      Serial.printf("║  Sample Count: %llu                                      ║\n", sc);
+      Serial.println("║                                                          ║");
+      {
+        char infoLines[7][59];
+        snprintf(infoLines[0], sizeof(infoLines[0]), "║  Hub ID: %-3d                                             ║", cd.hid);
+        snprintf(infoLines[1], sizeof(infoLines[1]), "║  Number of Sensors: %-3d                                  ║", cd.ns);
+        snprintf(infoLines[2], sizeof(infoLines[2]), "║  Sensor Type: %-43s ║", 
+                 (cd.sensor_Type == SENSOR_TYPE_MFL) ? "MFL (Magnetic Flux Leakage)" : "EGP (Eddy Current)");
+        snprintf(infoLines[3], sizeof(infoLines[3]), "║  Magnetic Axis: %-2d                                       ║", cd.mag_axis);
+        snprintf(infoLines[4], sizeof(infoLines[4]), "║  Angular Axis: %-2d                                        ║", cd.ang_axis);
+        snprintf(infoLines[5], sizeof(infoLines[5]), "║  Current Mode: %-43s ║", 
+                 mode_stat == ACQ_MODE ? "ACQUISITION" : "OTHER");
+        snprintf(infoLines[6], sizeof(infoLines[6]), "║  Sample Count: %-43llu ║", sc);
+        
+        for(int i = 0; i < 7; i++) {
+          Serial.println(infoLines[i]);
+        }
+      }
       Serial.println("║                                                          ║");
       Serial.println("║  Press any key to return to main menu                   ║");
+      Serial.println("║                                                          ║");
       Serial.println("╚══════════════════════════════════════════════════════════╝");
       break;
       
@@ -751,11 +785,15 @@ void displaySubMenu()
       Serial.println("╔══════════════════════════════════════════════════════════╗");
       Serial.println("║                      TEST MODE                          ║");
       Serial.println("╠══════════════════════════════════════════════════════════╣");
+      Serial.printf("║  Current Logging Frequency: %-6u Hz                      ║", dummy_log_freq);
+      Serial.println("║                                                          ║");
       Serial.println("║  1. Start Dummy Logging                                 ║");
       Serial.println("║  2. Stop Dummy Logging                                  ║");
       Serial.println("║  3. Test All Slots                                      ║");
+      Serial.println("║  4. Set Logging Frequency                               ║");
       Serial.println("║                                                          ║");
       Serial.println("║  0. Back to main menu                                   ║");
+      Serial.println("║                                                          ║");
       Serial.println("╚══════════════════════════════════════════════════════════╝");
       break;
   }
@@ -823,10 +861,10 @@ void processSubMenuInput(int cmd)
   
   switch(currentSubMenu) {
     case 1: // Slot Management
-      if (isValidInput(cmd, 1, 11)) {
+      if (isValidInput(cmd, 1, 22)) {
         processSlotCommand(cmd);
       } else {
-        Serial.println("\n❌ ERROR: Invalid option! Please select 0-11.");
+        Serial.println("\n❌ ERROR: Invalid option! Please select 0-22.");
         displaySubMenu();
       }
       break;
@@ -857,10 +895,10 @@ void processSubMenuInput(int cmd)
       break;
       
     case 5: // Test Mode
-      if (isValidInput(cmd, 1, 3)) {
+      if (isValidInput(cmd, 1, 4)) {
         processTestCommand(cmd);
       } else {
-        Serial.println("\n❌ ERROR: Invalid option! Please select 0-3.");
+        Serial.println("\n❌ ERROR: Invalid option! Please select 0-4.");
         displaySubMenu();
       }
       break;
@@ -885,6 +923,15 @@ void processSlotCommand(int cmd)
     case 11:
       Serial.println("🔌 Disconnecting MUX...");
       check_Serial_cmd(MUX_disconnect);
+      break;
+    case 12: case 13: case 14: case 15: case 16:
+      powerOnSlot((slot_t)(cmd - 12));
+      break;
+    case 17: case 18: case 19: case 20: case 21:
+      powerOffSlot((slot_t)(cmd - 17));
+      break;
+    case 22:
+      Serial.println("🔄 Refreshing slot status...");
       break;
   }
   Serial.println("✅ Command executed successfully!\n");
@@ -1015,6 +1062,29 @@ void processTestCommand(int cmd)
         delay(1000);
       }
       break;
+    case 4:
+      {
+        Serial.println("⚙️  Set Logging Frequency");
+        Serial.printf("Current frequency: %u Hz\n", dummy_log_freq);
+        Serial.print("Enter new frequency (1-100000 Hz): ");
+        
+        // Wait for user input
+        while(!Serial.available()) {
+          delay(10);
+        }
+        
+        String input = Serial.readStringUntil('\n');
+        input.trim();
+        uint32_t newFreq = input.toInt();
+        
+        if(newFreq >= 1 && newFreq <= 100000) {
+          dummy_log_freq = newFreq;
+          Serial.printf("✅ Logging frequency set to: %u Hz\n", dummy_log_freq);
+        } else {
+          Serial.println("❌ Invalid frequency! Must be between 1-100000 Hz");
+        }
+      }
+      break;
   }
   Serial.println("✅ Command executed successfully!\n");
   displaySubMenu();
@@ -1026,6 +1096,55 @@ void processTestCommand(int cmd)
 bool isValidInput(int input, int minVal, int maxVal)
 {
   return (input >= minVal && input <= maxVal);
+}
+
+/**
+ * @brief Power on a specific slot
+ */
+void powerOnSlot(slot_t slot)
+{
+  IOEX.digitalWrite(IOEX_pwrPins[slot], LOW);
+  Serial.printf("⚡ Slot %d powered ON\n", slot + 1);
+}
+
+/**
+ * @brief Power off a specific slot
+ */
+void powerOffSlot(slot_t slot)
+{
+  IOEX.digitalWrite(IOEX_pwrPins[slot], HIGH);
+  Serial.printf("🔌 Slot %d powered OFF\n", slot + 1);
+}
+
+/**
+ * @brief Get the power status of a slot
+ */
+bool getSlotPowerStatus(slot_t slot)
+{
+  return !IOEX.digitalRead(IOEX_pwrPins[slot]);
+}
+
+/**
+ * @brief Display status of all slots
+ */
+void displaySlotStatus()
+{
+  Serial.println("");
+  Serial.println("╔══════════════════════════════════════════════════════════╗");
+  Serial.println("║                     SLOT STATUS                         ║");
+  Serial.println("╠══════════════════════════════════════════════════════════╣");
+  for (int i = SLOT1; i <= SLOT5; i++)
+  {
+    bool powerStatus = getSlotPowerStatus((slot_t)i);
+    char statusLine[59];
+    if (powerStatus) {
+      snprintf(statusLine, sizeof(statusLine), "║  Slot %d: POWERED ON                                     ║", i + 1);
+    } else {
+      snprintf(statusLine, sizeof(statusLine), "║  Slot %d: POWERED OFF                                    ║", i + 1);
+    }
+    Serial.println(statusLine);
+  }
+  Serial.println("╚══════════════════════════════════════════════════════════╝");
 }
 
 #endif // BUILD_MASTER

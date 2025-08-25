@@ -1214,7 +1214,7 @@ void Sensors::putSensorsInSleep(bool Special32BitEN)
     _myspi->endTransaction();
 }
 
-void Sensors::livereadMFL(uint8_t Channel, bool special32bitEN)
+void Sensors::livereadMFL(uint8_t Channel, bool special32bitEN, bool sdCardConnected)
 {
     _myspi->beginTransaction(SensorSPI);
     SR->StoreOneLOWbit();
@@ -1225,6 +1225,18 @@ void Sensors::livereadMFL(uint8_t Channel, bool special32bitEN)
     debug.print("\033[2J\033[H"); // Clear screen and move cursor to top
     debug.println("╔═══════════════════════════════════════════════════════════════════╗");
     debug.println("║                          MFL SENSOR DATA                         ║");
+    debug.println("╠═══════════════════════════════════════════════════════════════════╣");
+    
+    // Display slot configuration info at the top  
+    extern uint8_t SID, HID;
+    char configLine1[68], configLine2[68], configLine3[68];
+    snprintf(configLine1, sizeof(configLine1), "║  SLOT ID: %-2d  │  HUB ID: %-2d  │  Sensor Type: MFL           ║", SID, HID);
+    snprintf(configLine2, sizeof(configLine2), "║  Status: ACTIVE    │  Mode: LIVE READOUT                        ║");
+    snprintf(configLine3, sizeof(configLine3), "║  SD Card: %-8s │  Logging: READY                     ║", 
+             sdCardConnected ? "CONNECTED" : "DISCONN");
+    debug.println(configLine1);
+    debug.println(configLine2);
+    debug.println(configLine3);
     debug.println("╠═══════════════════════════════════════════════════════════════════╣");
     debug.println("║                      LDC SENSORS (Inductance)                    ║");
     debug.println("╠═══════════════════════════════════════════════════════════════════╣");
@@ -1319,7 +1331,7 @@ void Sensors::liveReadODO(uint8_t Channel, bool special32bitEN)
     _myspi->endTransaction();
 }
 
-void Sensors::liveReadEGP(uint8_t Channel, bool special32bitEN)
+void Sensors::liveReadEGP(uint8_t Channel, bool special32bitEN, bool sdCardConnected)
 {
     _myspi->beginTransaction(SensorSPI);
     SR->StoreOneLOWbit();
@@ -1328,6 +1340,18 @@ void Sensors::liveReadEGP(uint8_t Channel, bool special32bitEN)
     debug.print("\033[2J\033[H"); // Clear screen and move cursor to top
     debug.println("╔══════════════════════════════════════════════════════════════════════╗");
     debug.println("║                           EGP SENSOR DATA                           ║");
+    debug.println("╠══════════════════════════════════════════════════════════════════════╣");
+    
+    // Display slot configuration info at the top
+    extern uint8_t SID, HID;
+    char configLine1[71], configLine2[71], configLine3[71];
+    snprintf(configLine1, sizeof(configLine1), "║  SLOT ID: %-2d  │  HUB ID: %-2d  │  Sensor Type: EGP               ║", SID, HID);
+    snprintf(configLine2, sizeof(configLine2), "║  Status: ACTIVE    │  Mode: LIVE READOUT                            ║");
+    snprintf(configLine3, sizeof(configLine3), "║  SD Card: %-8s │  Logging: READY                         ║", 
+             sdCardConnected ? "CONNECTED" : "DISCONN");
+    debug.println(configLine1);
+    debug.println(configLine2);
+    debug.println(configLine3);
     debug.println("╠══════════════════════════════════════════════════════════════════════╣");
     debug.println("║ Sensor │    Type    │        Value        │ Status │     Visual     ║");
     debug.println("╠══════════════════════════════════════════════════════════════════════╣");

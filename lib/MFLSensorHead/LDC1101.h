@@ -499,7 +499,7 @@ public:
 
     float liveReadAngle();
 
-    void livereadMFL(uint8_t Channel = X_CH_RESULT, bool special32bitEN = true);
+    void livereadMFL(uint8_t Channel = X_CH_RESULT, bool special32bitEN = true, bool sdCardConnected = false);
 
     /**
      * @brief Print sensor values of ODO meter
@@ -508,7 +508,7 @@ public:
      */
     void liveReadODO(uint8_t Channel = X_CH_RESULT, bool special32bitEN = true);
 
-    void liveReadEGP(uint8_t Channel = X_CH_RESULT, bool special32bitEN = true);
+    void liveReadEGP(uint8_t Channel = X_CH_RESULT, bool special32bitEN = true, bool sdCardConnected = false);
     
     // Low Frequency Readout on Serial
     void liveReadSensors(bool Special32BitEN); // Done

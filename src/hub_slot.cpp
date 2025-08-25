@@ -66,9 +66,9 @@ void loop_slot()
             memset(wireData, 0, sizeof(wireData));
         }
 #if defined(MFL)
-        Sens.livereadMFL();
+        Sens.livereadMFL(X_CH_RESULT, true, core.getSDCardStatus());
 #else
-        Sens.liveReadEGP();
+        Sens.liveReadEGP(X_CH_RESULT, true, core.getSDCardStatus());
 #endif
         delay(100);
         rp2040.fifo.push_nb(HEALTH_FLAG); // push health flag to reset watchdog timer
