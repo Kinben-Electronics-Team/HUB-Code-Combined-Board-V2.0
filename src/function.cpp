@@ -98,7 +98,10 @@ void Logging::check_fifo(uint32_t fifo_val)
 
     case MOUNT_SD: // Opens a file for new logging
         // delay(1000);
+        Serial.println("BETA: Processing MOUNT_SD request");
         sd_card_init();
+        Serial.println("BETA: SD initialization complete, sending ACK");
+        rp2040.fifo.push_nb(MOUNT_SD_ACK);  // Send acknowledgment to Core 0
         //_mySerial->->println("sd mounted");
         break;
 
