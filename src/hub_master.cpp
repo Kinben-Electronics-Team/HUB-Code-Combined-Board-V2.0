@@ -737,6 +737,9 @@ void displaySubMenu()
       Serial.println("║                     │                   │ 20. Power OFF4 ║");
       Serial.println("║                     │                   │ 21. Power OFF5 ║");
       Serial.println("║                                                          ║");
+      Serial.println("║  Sensor Supply Voltage:                                 ║");
+      Serial.println("║  23. Set 3.3V       │ 24. Set 5V        │ 25. Power OFF  ║");
+      Serial.println("║                                                          ║");
       Serial.println("║  0. Back to main menu                                   ║");
       Serial.println("╚══════════════════════════════════════════════════════════╝");
       break;
@@ -773,8 +776,9 @@ void displaySubMenu()
         Serial.println(configLine3);
       }
       Serial.println("║                                                          ║");
-      Serial.println("║  1. Configure HID       │  3. Configure Mag Axis        ║");
-      Serial.println("║  2. Configure SID       │  4. Configure Ang Axis        ║");
+      Serial.println("║  1. Configure HID       │  4. Configure Ang Axis        ║");
+      Serial.println("║  2. Configure SID       │  5. Configure Sensor Type     ║");
+      Serial.println("║  3. Configure Mag Axis  │                               ║");
       Serial.println("║                                                          ║");
       Serial.println("║  0. Back to main menu                                   ║");
       Serial.println("║                                                          ║");
@@ -891,10 +895,10 @@ void processSubMenuInput(int cmd)
   
   switch(currentSubMenu) {
     case 1: // Slot Management
-      if (isValidInput(cmd, 1, 22)) {
+      if (isValidInput(cmd, 1, 25)) {
         processSlotCommand(cmd);
       } else {
-        Serial.println("\n❌ ERROR: Invalid option! Please select 0-22.");
+        Serial.println("\n❌ ERROR: Invalid option! Please select 0-25.");
         displaySubMenu();
       }
       break;
@@ -909,10 +913,10 @@ void processSubMenuInput(int cmd)
       break;
       
     case 3: // Configuration
-      if (isValidInput(cmd, 1, 4)) {
+      if (isValidInput(cmd, 1, 5)) {
         processConfigCommand(cmd);
       } else {
-        Serial.println("\n❌ ERROR: Invalid option! Please select 0-4.");
+        Serial.println("\n❌ ERROR: Invalid option! Please select 0-5.");
         displaySubMenu();
       }
       break;
@@ -962,6 +966,24 @@ void processSlotCommand(int cmd)
       break;
     case 22:
       Serial.println("🔄 Refreshing slot status...");
+      break;
+      
+    case 23:
+      Serial.println("⚡ Setting sensor supply voltage to 3.3V...");
+      setSensorPwr(pwr_3v3);
+      Serial.println("✅ Sensor supply voltage set to 3.3V");
+      break;
+      
+    case 24:
+      Serial.println("⚡ Setting sensor supply voltage to 5V...");
+      setSensorPwr(pwr_5v);
+      Serial.println("✅ Sensor supply voltage set to 5V");
+      break;
+      
+    case 25:
+      Serial.println("🔌 Turning OFF sensor supply voltage...");
+      setSensorPwr(pwr_off);
+      Serial.println("✅ Sensor supply voltage turned OFF");
       break;
   }
   Serial.println("✅ Command executed successfully!\n");
@@ -1059,6 +1081,47 @@ void processConfigCommand(int cmd)
       break;
     case 4:
       Serial.println("📐 Angular Axis configuration not yet implemented.");
+      break;
+      
+    case 5:
+      {
+        Serial.println("🔧 Configure Sensor Type");
+        Serial.printf("Current Sensor Type: %s\n", (cd.sensor_Type == SENSOR_TYPE_MFL) ? "MFL" : "EGP");
+        Serial.println("Select new sensor type:");
+        Serial.println("  0 - MFL (Magnetic Flux Leakage) - 3.3V");
+        Serial.println("  1 - EGP (Eddy Gap Probe) - 5V");
+        Serial.print("Enter choice (0-1): ");
+        
+        // Wait for user input
+        while(!Serial.available()) {
+          delay(10);
+        }
+        String input = Serial.readStringUntil('\n');
+        input.trim();
+        int newType = input.toInt();
+        
+        if (newType == 0 || newType == 1) {
+          cd.sensor_Type = newType;
+          EEPROM.put(set_sensor_type, cd.sensor_Type);
+          if (EEPROM.commit()) {
+            // Update power supply based on sensor type
+            setSensorPwr((cd.sensor_Type == SENSOR_TYPE_MFL) ? pwr_3v3 : pwr_5v);
+            Serial.printf("✅ Sensor type updated to %s\n", (cd.sensor_Type == SENSOR_TYPE_MFL) ? "MFL (3.3V)" : "EGP (5V)");
+            Serial.println("   Power supply automatically adjusted");
+            
+            // Broadcast to slots
+            uint8_t configSlave[2];
+            configSlave[0] = set_sensor_type;
+            configSlave[1] = cd.sensor_Type;
+            wireBroadcast(configSlave, 2);
+            Serial.println("   Configuration sent to all slots");
+          } else {
+            Serial.println("❌ Failed to save sensor type to EEPROM");
+          }
+        } else {
+          Serial.println("❌ Invalid selection! Please enter 0 or 1");
+        }
+      }
       break;
   }
   Serial.println("\nPress any key to continue...");

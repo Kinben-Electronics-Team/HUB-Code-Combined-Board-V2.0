@@ -9,7 +9,8 @@
       "Bash(copy includehub_master.h ..include)",
       "Bash(pio device monitor:*)",
       "Bash(git add:*)",
-      "Bash(/c/Users/manas/.platformio/penv/Scripts/pio.exe run -e hub_slot_beta)"
+      "Bash(/c/Users/manas/.platformio/penv/Scripts/pio.exe run -e hub_slot_beta)",
+      "Bash(~/.platformio/penv/Scripts/picotool.exe reboot -f -u)"
     ],
     "deny": [],
     "ask": []

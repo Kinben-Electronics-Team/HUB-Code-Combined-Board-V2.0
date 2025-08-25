@@ -1431,11 +1431,13 @@ void Sensors::liveReadEGP(uint8_t Channel, bool special32bitEN, bool sdCardConne
     }
     
     debug.println("╚══════════════════════════════════════════════════════════════════════╝");
-    debug.print("║ Timestamp: ");
-    debug.print(millis());
-    debug.print(" ms │ Total Sensors: ");
-    debug.print(totalTMAG5170);
-    debug.println("                      ║");
+    
+    // Calculate EGP count from total TMAG sensors (4 TMAG per EGP)
+    int egpCount = totalTMAG5170 / 4;
+    char statusLine[71];
+    snprintf(statusLine, sizeof(statusLine), "║ EGP Boards: %-2d │ TMAG Sensors: %-2d │ Timestamp: %-8lu ms ║", 
+             egpCount, totalTMAG5170, millis());
+    debug.println(statusLine);
     debug.println("╚══════════════════════════════════════════════════════════════════════╝");
     
     SR->ShiftCS();

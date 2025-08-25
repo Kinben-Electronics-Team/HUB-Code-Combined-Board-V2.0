@@ -36,8 +36,16 @@ void setup_slot()
     MSTR_Serial.begin(COM_BAUDRATE); // begin serial communication with master
 
     core.begin();
-    core.Sensor_begin(true, 0); // initialise sensors and power them on
+#if defined(EGP)
+    core.Sensor_begin(true, 5); // initialise EGP sensors - 5 EGP boards (20 TMAG sensors)
+    Serial.println("EGP Sensors initialised - 5 EGPs (20 TMAG sensors)");
+#elif defined(MFL)
+    core.Sensor_begin(true, 0); // initialise MFL sensors  
+    Serial.println("MFL Sensors initialised");
+#else
+    core.Sensor_begin(true, 0); // default initialization
     Serial.println("Sensors initialised");
+#endif
 
     pinMode(SD_SW_pin, OUTPUT);
     digitalWrite(SD_SW_pin, LOW);                // CONNECT SD CARD TO uC
