@@ -6,6 +6,9 @@ bool beta_sample_debug = true; // Enable sample count debugging
 uint64_t last_received_sample = 0;
 unsigned long sample_receive_count = 0;
 
+// Live readout configuration
+unsigned long LIVE_READOUT_INTERVAL_MS = 1000; // Configurable interval for live sensor readout (1000ms = 1 second)
+
 /*varible for psram*/
 psram_spi_inst_t psram_spi = psram_spi_init(pio0, -1, false);
 
@@ -122,12 +125,16 @@ void loop_slot()
             core.ExecuteWireCmd(wireData[0], wireData[1]);
             memset(wireData, 0, sizeof(wireData));
         }
+        static unsigned long lastLiveReadTime = 0;
+        if (millis() - lastLiveReadTime > LIVE_READOUT_INTERVAL_MS) { // Throttle based on configurable interval
 #if defined(MFL)
-        Sens.livereadMFL(X_CH_RESULT, true, core.getSDCardStatus());
+            Sens.livereadMFL(X_CH_RESULT, true, core.getSDCardStatus());
 #else
-        Sens.liveReadEGP(X_CH_RESULT, true, core.getSDCardStatus());
+            Sens.liveReadEGP(X_CH_RESULT, true, core.getSDCardStatus());
 #endif
-        delay(100);
+            lastLiveReadTime = millis();
+        }
+        delay(100); // Main loop delay - prevents busy waiting, allows other processes to run
         rp2040.fifo.push_nb(HEALTH_FLAG); // push health flag to reset watchdog timer
     }
 }
@@ -212,6 +219,19 @@ void requestEventCallback()
 void trigger()
 {
     trig_status = 1;
+}
+
+/**
+ * \brief Set live readout interval
+ * \param interval_ms New interval in milliseconds (minimum 500ms to prevent serial overload)
+ */
+void setLiveReadoutInterval(unsigned long interval_ms)
+{
+    if (interval_ms < 500) {
+        interval_ms = 500; // Minimum 500ms to prevent serial port overload
+    }
+    LIVE_READOUT_INTERVAL_MS = interval_ms;
+    Serial.printf("Live readout interval set to %lu ms\n", LIVE_READOUT_INTERVAL_MS);
 }
 
 #endif // BUILD_SLOT
