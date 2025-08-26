@@ -9,7 +9,7 @@
 
 #define SENSOR_TYPE_MFL 0                   // sensor type MFL
 #define SENSOR_TYPE_EGP 1                   // sensor type EGP
-#define DEFAULT_SENSOR_TYPE SENSOR_TYPE_MFL // default sensor type
+// Note: DEFAULT_SENSOR_TYPE is defined in platformio.ini build flags
 
 const uint8_t startBytes[] = {
     0xF1, 0xE2, 0xD3, 0xC4, 0xB5, 0xA6, 0x97, 0x88, 0x79, 0x6A, 0x5B, 0x4C, 0x3D, 0x2E, 0x1F, 0x10,

@@ -425,7 +425,13 @@ void Acquire::begin()
     _myWire->setClock(I2C_CLOCK_SPEED);
     _myWire->setSDA(SDA_pin);
     _myWire->setSCL(SCL_pin);
-    _myWire->begin(I2C_SLAVE_ADDRESS);
+    
+    // Use SID as dynamic I2C slave address (fallback to DEFAULT_SLOT_ID if SID is 0)
+    uint8_t i2c_slave_addr = (SID > 0 && SID <= 5) ? SID : DEFAULT_SLOT_ID;
+    _myWire->begin(i2c_slave_addr);
+    Serial.printf("I2C Slave initialized at dynamic address: 0x%02X (SID: %d)\n", i2c_slave_addr, SID);
+    
+    // I2C status tracking removed due to compilation issues
     _myWire->onReceive(receiveEventCallback);
     _myWire->onRequest(requestEventCallback);
 
@@ -583,7 +589,65 @@ void Acquire::get_data()
 
 void Acquire::requestEvent()
 {
-    _myWire->write(0x1); // Send acknowledgment message
+    extern uint8_t last_query_cmd; // From hub_slot.cpp
+    
+    Serial.printf("📤 I2C REQUEST: Master asking for data (last_query_cmd=0x%02X)\n", last_query_cmd);
+    
+    uint8_t response[4] = {0}; // Response buffer
+    
+    switch(last_query_cmd) {
+        case 0x10: // I2C_CMD_GET_STATUS - Slot status and health
+            response[0] = SID; // Actual slot ID from EEPROM
+            response[1] = 0x01;       // Status: 0x01 = Online, 0x00 = Offline
+            response[2] = 0x00;       // Error flags (0 = no errors)
+            response[3] = millis() & 0xFF; // Activity indicator (low byte of millis)
+            _myWire->write(response, 4);
+            Serial.printf("📤 Sent STATUS: [0x%02X 0x%02X 0x%02X 0x%02X]\n", response[0], response[1], response[2], response[3]);
+            break;
+            
+        case 0x11: // I2C_CMD_GET_SENSORS - Sensor readings
+            {
+                // Send dummy sensor data (in real implementation, read from sensors)
+                uint16_t sensor_value = analogRead(A0); // Example sensor reading
+                response[0] = SID;                       // Actual slot ID from EEPROM
+                response[1] = (sensor_value >> 8) & 0xFF; // High byte
+                response[2] = sensor_value & 0xFF;        // Low byte  
+                response[3] = 0xAA;                       // Data valid marker
+                _myWire->write(response, 4);
+                Serial.printf("📤 Sent SENSORS: [0x%02X 0x%02X 0x%02X 0x%02X] Value=%d\n", response[0], response[1], response[2], response[3], sensor_value);
+            }
+            break;
+            
+        case 0x12: // I2C_CMD_GET_CONFIG - Slot configuration
+            response[0] = SID; // Actual slot ID from EEPROM
+            #ifdef EGP
+            response[1] = 1;          // EGP sensor type
+            response[2] = 20;         // Number of sensors (typical for EGP)
+            #else
+            response[1] = 0;          // MFL sensor type
+            response[2] = 8;          // Number of sensors (typical for MFL)
+            #endif
+            response[3] = 0;          // Default magnetic axis config
+            _myWire->write(response, 4);
+            Serial.printf("📤 Sent CONFIG: [0x%02X 0x%02X 0x%02X 0x%02X]\n", response[0], response[1], response[2], response[3]);
+            break;
+            
+        case 0x13: // I2C_CMD_PING - Ping response
+            response[0] = SID; // Actual slot ID from EEPROM
+            response[1] = 0xAA;       // Ping response marker
+            response[2] = 0x55;       // Ping response marker
+            response[3] = last_query_cmd; // Echo the command
+            _myWire->write(response, 4);
+            Serial.printf("📤 Sent PING: [0x%02X 0x%02X 0x%02X 0x%02X]\n", response[0], response[1], response[2], response[3]);
+            break;
+            
+        default: // Legacy behavior - simple acknowledgment
+            _myWire->write(0x1); // Send acknowledgment message
+            Serial.println("📤 Sent ACK: [0x01] (legacy)");
+            break;
+    }
+    
+    last_query_cmd = 0; // Reset after responding
 }
 
 void Acquire::ExecuteWireCmd(uint8_t cmd, uint8_t data)

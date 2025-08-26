@@ -58,6 +58,12 @@
 #define SID_REG 0x06
 #define HID_REG 0x07
 
+// Bidirectional communication query commands
+#define I2C_CMD_GET_STATUS 0x10    // Query slot status and health
+#define I2C_CMD_GET_SENSORS 0x11   // Query sensor readings  
+#define I2C_CMD_GET_CONFIG 0x12    // Query slot configuration
+#define I2C_CMD_PING 0x13          // Ping slot for connectivity test
+
 /*CSB pin define*/
 #define MODE_pin 18
 #define TRIG_pin 26 // trigger pin for acquisition

@@ -90,6 +90,12 @@ const uint8_t IOEX_pwrPins[] = {15, 9, 6, 3, 0};   // pins to power respective h
 #define SID_REG 0x06
 #define HID_REG 0x07
 
+// Bidirectional communication query commands
+#define I2C_CMD_GET_STATUS 0x10    // Query slot status and health
+#define I2C_CMD_GET_SENSORS 0x11   // Query sensor readings  
+#define I2C_CMD_GET_CONFIG 0x12    // Query slot configuration
+#define I2C_CMD_PING 0x13          // Ping slot for connectivity test
+
 enum sensorpwrsel
 {
   pwr_off = 0, // sensor power off

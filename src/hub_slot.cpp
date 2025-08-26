@@ -16,6 +16,32 @@ psram_spi_inst_t psram_spi = psram_spi_init(pio0, -1, false);
 volatile bool trig_status = 0;
 uint8_t wireData[4];
 volatile bool wire_received = 0;
+uint8_t last_query_cmd = 0; // Track the last query command for requestEvent response
+
+// Enhanced command history for persistent I2C status display
+#define CMD_HISTORY_SIZE 5
+struct CommandHistory {
+    uint8_t cmd;
+    uint8_t data_len;
+    uint8_t data[4];  // Store command data
+    uint32_t timestamp;
+    bool was_query;
+    bool was_broadcast;
+    bool was_processed;  // Did this slot process it?
+} cmd_history[CMD_HISTORY_SIZE];
+uint8_t cmd_history_index = 0;
+
+// I2C status tracking
+struct I2CStatus {
+    uint8_t slave_address;
+    uint32_t clock_speed;
+    uint32_t total_commands_received;
+    uint32_t commands_processed;
+    uint32_t broadcasts_received;
+    uint32_t queries_processed;
+    unsigned long last_activity;
+    bool is_initialized;
+} i2c_status = {0};
 
 EasyTransfer EscRX;
 
@@ -125,6 +151,91 @@ void loop_slot()
             core.ExecuteWireCmd(wireData[0], wireData[1]);
             memset(wireData, 0, sizeof(wireData));
         }
+        
+        // Persistent I2C Status Display - every 8 seconds
+        static unsigned long last_status_display = 0;
+        if (millis() - last_status_display > 8000) {
+            extern uint8_t SID; // Actual SID from EEPROM
+            
+            Serial.println("╔════════════════════════════════════════════════════════╗");
+            Serial.printf("║                    I2C STATUS - SLOT %d                  ║\n", SID);
+            Serial.println("╠════════════════════════════════════════════════════════╣");
+            
+            // I2C Configuration and Statistics
+            Serial.printf("║ Address: 0x%02X  │ Speed: %d Hz │ Status: %s      ║\n", 
+                         i2c_status.slave_address, 
+                         i2c_status.clock_speed,
+                         i2c_status.is_initialized ? "READY" : "ERROR");
+                         
+            uint32_t seconds_since_activity = (millis() - i2c_status.last_activity) / 1000;
+            Serial.printf("║ Last Activity: %lu sec ago │ Query Pending: 0x%02X     ║\n", 
+                         seconds_since_activity, last_query_cmd);
+            Serial.println("║                                                        ║");
+            
+            // Statistics
+            Serial.printf("║ Total RX: %-4lu │ Processed: %-4lu │ Broadcasts: %-4lu ║\n", 
+                         i2c_status.total_commands_received,
+                         i2c_status.commands_processed, 
+                         i2c_status.broadcasts_received);
+            Serial.printf("║ Queries: %-5lu │ Build Default: %-2d │              ║\n", 
+                         i2c_status.queries_processed, DEFAULT_SLOT_ID);
+            Serial.println("║                                                        ║");
+            
+            // Recent Command History (Last 5 commands processed by this slot)
+            Serial.println("║ RECENT COMMANDS PROCESSED BY THIS SLOT:               ║");
+            uint32_t current_time = millis();
+            int displayed_count = 0;
+            
+            // Display commands in reverse chronological order (newest first)
+            for (int i = 0; i < CMD_HISTORY_SIZE; i++) {
+                int idx = (cmd_history_index - 1 - i + CMD_HISTORY_SIZE) % CMD_HISTORY_SIZE;
+                if (cmd_history[idx].timestamp > 0 && cmd_history[idx].was_processed) {
+                    uint32_t age_sec = (current_time - cmd_history[idx].timestamp) / 1000;
+                    const char* cmd_name = "OTHER";
+                    
+                    // Decode command names
+                    switch(cmd_history[idx].cmd) {
+                        case 0x04: cmd_name = "SD_CON"; break;
+                        case 0x05: cmd_name = "SD_DISCON"; break;
+                        case 0x06: cmd_name = "SET_SID"; break;
+                        case 0x07: cmd_name = "SET_HID"; break;
+                        case 0x10: cmd_name = "GET_STATUS"; break;
+                        case 0x11: cmd_name = "GET_SENSORS"; break;
+                        case 0x12: cmd_name = "GET_CONFIG"; break;
+                        case 0x13: cmd_name = "PING"; break;
+                        default: cmd_name = "OTHER"; break;
+                    }
+                    
+                    char data_str[20] = "";
+                    for (int j = 0; j < cmd_history[idx].data_len && j < 4; j++) {
+                        char hex_byte[6];
+                        snprintf(hex_byte, sizeof(hex_byte), "%s%02X", j > 0 ? " " : "", cmd_history[idx].data[j]);
+                        strcat(data_str, hex_byte);
+                    }
+                    
+                    Serial.printf("║ %d. %s %s [%s] %s %ds ago                    ║\n", 
+                                 displayed_count + 1,
+                                 cmd_history[idx].was_query ? "🔍" : "⚙️",
+                                 cmd_name,
+                                 data_str,
+                                 cmd_history[idx].was_broadcast ? "BROADCAST" : "DIRECT   ",
+                                 age_sec);
+                    displayed_count++;
+                }
+            }
+            
+            if (displayed_count == 0) {
+                Serial.println("║                  (No commands processed yet)          ║");
+            }
+            
+            // Fill remaining lines if needed
+            for (int i = displayed_count; i < CMD_HISTORY_SIZE; i++) {
+                Serial.println("║                                                        ║");
+            }
+            
+            Serial.println("╚════════════════════════════════════════════════════════╝");
+            last_status_display = millis();
+        }
         static unsigned long lastLiveReadTime = 0;
         if (millis() - lastLiveReadTime > LIVE_READOUT_INTERVAL_MS) { // Throttle based on configurable interval
 #if defined(MFL)
@@ -202,6 +313,59 @@ void receiveEventCallback(int numBytes)
         }
     }
     Serial.printf("Wire data received:%d \n", i);
+    
+    // Process and categorize received commands
+    if (i > 0) {
+        extern uint8_t SID; // Get current slot's SID
+        uint8_t cmd = wireData[0];
+        
+        // Determine if this command is relevant to this slot
+        bool is_broadcast = true;  // All I2C commands via broadcast address (0x00) are broadcasts
+        bool is_query = (cmd >= 0x10 && cmd <= 0x13);
+        bool should_process = true;  // All broadcasts should be tracked
+        
+        // Update I2C statistics
+        i2c_status.total_commands_received++;
+        i2c_status.last_activity = millis();
+        
+        if (is_broadcast) {
+            i2c_status.broadcasts_received++;
+        }
+        
+        if (should_process) {
+            i2c_status.commands_processed++;
+            if (is_query) {
+                i2c_status.queries_processed++;
+            }
+            
+            // Store command in history (only commands processed by this slot)
+            cmd_history[cmd_history_index].cmd = cmd;
+            cmd_history[cmd_history_index].data_len = i;
+            for (int j = 0; j < i && j < 4; j++) {
+                cmd_history[cmd_history_index].data[j] = wireData[j];
+            }
+            cmd_history[cmd_history_index].timestamp = millis();
+            cmd_history[cmd_history_index].was_query = is_query;
+            cmd_history[cmd_history_index].was_broadcast = is_broadcast;
+            cmd_history[cmd_history_index].was_processed = true;
+            cmd_history_index = (cmd_history_index + 1) % CMD_HISTORY_SIZE;
+            
+            Serial.printf("📡 I2C RX: Cmd=0x%02X Data=[", cmd);
+            for (int j = 0; j < i; j++) {
+                Serial.printf("0x%02X", wireData[j]);
+                if (j < i-1) Serial.print(" ");
+            }
+            Serial.printf("] %s%s\n", 
+                         is_broadcast ? "[BROADCAST] " : "[DIRECT] ",
+                         is_query ? "[QUERY]" : "[CONFIG]");
+        }
+        
+        if (is_query) {
+            last_query_cmd = cmd;
+            Serial.printf("🔍 Query command stored: 0x%02X (will respond in requestEvent)\n", cmd);
+        }
+    }
+    
     wire_received = 1;
 }
 

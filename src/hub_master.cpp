@@ -10,6 +10,15 @@ void check_mode();
 void send_I2C_cmd(slot_t slot, const uint8_t *cmd, uint8_t n);
 
 uint8_t wireBroadcast(const uint8_t *data, uint8_t n);
+bool receiveDataWithTimeout(EasyTransfer* et, uint32_t timeout_ms, uint8_t retries);
+
+// Bidirectional communication query functions
+bool querySlot(slot_t slot, uint8_t query_cmd, uint8_t* response, uint8_t response_len, uint32_t timeout_ms = 500);
+bool getSlotStatus(slot_t slot, uint8_t* status_data);
+bool getSlotSensors(slot_t slot, uint16_t* sensor_value);
+bool getSlotConfig(slot_t slot, uint8_t* config_data);
+bool pingSlot(slot_t slot);
+
 void check_Serial_cmd(uint8_t cmd);
 void checkCSB(cmd_t *c);
 void displayMainMenu();
@@ -43,6 +52,17 @@ EasyTransfer EscRX, // EasyTransfer object to get sample count from CSB
     EscTX;          // EasyTransfer object to send sample count to CSB
 
 uint64_t sc = 0; // sample count to be received from CSB
+
+// Communication statistics
+struct CommStats {
+  uint32_t i2c_success_count = 0;
+  uint32_t i2c_error_count = 0;
+  uint32_t easytransfer_success_count = 0;
+  uint32_t easytransfer_timeout_count = 0;
+  unsigned long last_comm_activity = 0;
+};
+
+CommStats comm_stats;
 
 // Menu system variables
 bool inMainMenu = true;
@@ -176,6 +196,9 @@ void setup_master()
   inSubMenu = false;
   currentSubMenu = 0;
   
+  // Initialize communication statistics
+  comm_stats.last_comm_activity = millis();
+  
   // Display welcome message and main menu
   Serial.println("\n🚀 HUB Master Controller Initialized!");
   Serial.println("📋 Menu system ready - Press Enter to display menu");
@@ -190,7 +213,7 @@ void loop_master()
   {
     Trig_stat = 0;
     digitalWrite(SLOT_TRIG_pin, HIGH);
-    if (!EscRX.receiveData()) // receive sample count from CSB
+    if (!receiveDataWithTimeout(&EscRX, 50, 1)) // receive sample count from CSB with 50ms timeout + 1 retry
       sc = 0;                 // reset sample count if not received
     // sc++;             // increment sample count
     EscTX.sendData(); // send sample count to CSB
@@ -219,7 +242,7 @@ void loop_master()
       processMenuInput();
     }
   }
-  if (EconfigRX.receiveData()) // receive configuration from CSB
+  if (EconfigRX.receiveData()) // receive configuration from CSB (non-critical, keep original for now)
   checkCSB(&configRX);
 }
 
@@ -611,9 +634,54 @@ uint8_t wireBroadcast(const uint8_t *data, uint8_t n)
     data++;
   }
 
-  Wire.endTransmission();
+  uint8_t result = Wire.endTransmission();
+  comm_stats.last_comm_activity = millis();
+  
+  if (result == 0) {
+    comm_stats.i2c_success_count++;
+    Serial.println("✅ I2C Broadcast successful");
+  } else {
+    comm_stats.i2c_error_count++;
+    Serial.printf("❌ I2C Broadcast failed with error code: %d\n", result);
+    Serial.println("   Error codes: 1=Buffer full, 2=NACK on address, 3=NACK on data, 4=Other");
+  }
+  
+  return result;
+}
 
-  return Wire.endTransmission(1);
+/**
+ * @brief Enhanced EasyTransfer receive with timeout and statistics
+ * @param et EasyTransfer object pointer
+ * @param timeout_ms Timeout in milliseconds (default 100ms)
+ * @param retries Number of retry attempts (default 1)
+ * @return true if data received successfully, false on timeout/failure
+ */
+bool receiveDataWithTimeout(EasyTransfer* et, uint32_t timeout_ms = 100, uint8_t retries = 1)
+{
+  for (uint8_t attempt = 0; attempt <= retries; attempt++) {
+    uint32_t start_time = millis();
+    
+    while (millis() - start_time < timeout_ms) {
+      if (et->receiveData()) {
+        comm_stats.easytransfer_success_count++;
+        comm_stats.last_comm_activity = millis();
+        if (attempt > 0) {
+          Serial.printf("📡 EasyTransfer success on retry %d\n", attempt);
+        }
+        return true;  // Success
+      }
+      delayMicroseconds(100);  // Brief yield to prevent busy waiting
+    }
+    
+    if (attempt < retries) {
+      Serial.printf("⏰ EasyTransfer timeout on attempt %d, retrying...\n", attempt + 1);
+      delay(5);  // Brief delay before retry
+    }
+  }
+  
+  comm_stats.easytransfer_timeout_count++;
+  Serial.printf("❌ EasyTransfer failed after %d attempts\n", retries + 1);
+  return false;  // All attempts failed
 }
 
 /**
@@ -649,6 +717,149 @@ void requestEvent()
 {
   Serial.println("Request received, sending data...");
   // Wire.write(0x31);  // Send some data back to the master
+}
+
+/**
+ * @brief Generic function to query a slot and get response
+ * @param slot Target slot (SLOT1-SLOT5)
+ * @param query_cmd Query command (I2C_CMD_GET_STATUS, etc.)
+ * @param response Buffer to store response data
+ * @param response_len Expected response length
+ * @param timeout_ms Timeout in milliseconds
+ * @return true if successful, false if failed
+ */
+bool querySlot(slot_t slot, uint8_t query_cmd, uint8_t* response, uint8_t response_len, uint32_t timeout_ms)
+{
+  if (slot < SLOT1 || slot > SLOT5 || !response || response_len == 0) {
+    Serial.println("❌ Invalid query parameters");
+    return false;
+  }
+  
+  // Send query command to specific slot
+  Serial.printf("🔍 Querying slot %d with command 0x%02X\n", slot + 1, query_cmd);
+  send_I2C_cmd(slot, &query_cmd, 1); // This will handle addressing and call wireBroadcast
+  
+  // Request response from slot
+  delay(10); // Brief delay to let slot process the query
+  
+  // Select the specific slot for I2C communication
+  for (uint8_t i = SLOT1; i <= SLOT5; i++) {
+    IOEX.digitalWrite(IOEX_ioPins[i], i == slot ? HIGH : LOW);
+  }
+  delay(1); // Allow IO to settle
+  
+  // Request data from the selected slot using dynamic addressing
+  uint8_t slot_i2c_addr = slot + 1; // Use slot position as I2C address (1-5)
+  uint8_t bytes_requested = Wire.requestFrom(slot_i2c_addr, response_len);
+  Serial.printf("Requesting from I2C address 0x%02X (slot %d)\n", slot_i2c_addr, slot + 1);
+  
+  // Check if requestFrom succeeded (returned the expected number of bytes)
+  if (bytes_requested != response_len) {
+    Serial.printf("❌ I2C requestFrom failed: requested %d, got %d from slot %d\n", 
+                 response_len, bytes_requested, slot + 1);
+    comm_stats.i2c_error_count++;
+    return false;
+  }
+  
+  uint32_t start_time = millis();
+  uint8_t bytes_received = 0;
+  
+  // Clear response buffer first
+  memset(response, 0, response_len);
+  
+  // Read available data with timeout
+  while (millis() - start_time < timeout_ms && bytes_received < response_len) {
+    if (Wire.available()) {
+      response[bytes_received] = Wire.read();
+      bytes_received++;
+    } else {
+      delayMicroseconds(100);
+    }
+  }
+  
+  // Validate we received the expected number of bytes
+  if (bytes_received != response_len) {
+    Serial.printf("❌ Timeout: Got %d/%d bytes from slot %d\n", bytes_received, response_len, slot + 1);
+    comm_stats.i2c_error_count++;
+    return false;
+  }
+  
+  // Validate the slot ID in response (allow reasonable slot IDs)
+  if (response[0] == 0 || response[0] > 5) { // Basic sanity check - should be 1-5
+    Serial.printf("❌ Invalid slot ID in response: got %d from slot %d (expected 1-5)\n", 
+                 response[0], slot + 1);
+    comm_stats.i2c_error_count++;
+    return false;
+  }
+  
+  Serial.printf("✅ Received valid %d bytes from slot %d [ID:%d]\n", 
+               bytes_received, slot + 1, response[0]);
+  comm_stats.i2c_success_count++;
+  comm_stats.last_comm_activity = millis();
+  return true;
+}
+
+/**
+ * @brief Get slot status and health information
+ * @param slot Target slot
+ * @param status_data Buffer to store 4 bytes: [slot_id, status, error_flags, activity]
+ * @return true if successful
+ */
+bool getSlotStatus(slot_t slot, uint8_t* status_data)
+{
+  return querySlot(slot, I2C_CMD_GET_STATUS, status_data, 4, 500);
+}
+
+/**
+ * @brief Get sensor readings from slot
+ * @param slot Target slot  
+ * @param sensor_value Pointer to store 16-bit sensor value
+ * @return true if successful
+ */
+bool getSlotSensors(slot_t slot, uint16_t* sensor_value)
+{
+  uint8_t response[4];
+  if (querySlot(slot, I2C_CMD_GET_SENSORS, response, 4, 500)) {
+    if (response[3] == 0xAA) { // Verify data valid marker
+      *sensor_value = (response[1] << 8) | response[2];
+      return true;
+    }
+  }
+  *sensor_value = 0;
+  return false;
+}
+
+/**
+ * @brief Get slot configuration
+ * @param slot Target slot
+ * @param config_data Buffer to store 4 bytes: [slot_id, sensor_type, num_sensors, mag_axis]
+ * @return true if successful  
+ */
+bool getSlotConfig(slot_t slot, uint8_t* config_data)
+{
+  return querySlot(slot, I2C_CMD_GET_CONFIG, config_data, 4, 500);
+}
+
+/**
+ * @brief Ping slot for connectivity test
+ * @param slot Target slot
+ * @return true if slot responds to ping
+ */
+bool pingSlot(slot_t slot)
+{
+  uint8_t response[4];
+  if (querySlot(slot, I2C_CMD_PING, response, 4, 300)) {
+    // Verify ping response markers are exactly what we expect
+    if (response[1] == 0xAA && response[2] == 0x55 && response[3] == I2C_CMD_PING) {
+      Serial.printf("🏓 Slot %d PING: Valid markers [0xAA, 0x55, 0x%02X]\n", 
+                   slot + 1, response[3]);
+      return true;
+    } else {
+      Serial.printf("❌ Slot %d PING: Invalid markers [0x%02X, 0x%02X, 0x%02X]\n", 
+                   slot + 1, response[1], response[2], response[3]);
+    }
+  }
+  return false;
 }
 
 /**
@@ -791,7 +1002,9 @@ void displaySubMenu()
       Serial.println("╠══════════════════════════════════════════════════════════╣");
       Serial.println("║                                                          ║");
       {
-        char infoLines[7][59];
+        char infoLines[12][80];  // Expanded array for communication stats with larger buffer
+        
+        // System Configuration
         snprintf(infoLines[0], sizeof(infoLines[0]), "║  Hub ID: %-3d                                             ║", cd.hid);
         snprintf(infoLines[1], sizeof(infoLines[1]), "║  Number of Sensors: %-3d                                  ║", cd.ns);
         snprintf(infoLines[2], sizeof(infoLines[2]), "║  Sensor Type: %-43s ║", 
@@ -802,7 +1015,33 @@ void displaySubMenu()
                  mode_stat == ACQ_MODE ? "ACQUISITION" : "OTHER");
         snprintf(infoLines[6], sizeof(infoLines[6]), "║  Sample Count: %-43llu ║", sc);
         
-        for(int i = 0; i < 7; i++) {
+        // Communication Statistics
+        strcpy(infoLines[7], "║                                                          ║");
+        strcpy(infoLines[8], "║  [COMM] COMMUNICATION STATISTICS:                       ║");
+        
+        // I2C Statistics
+        float i2c_success_rate = 0;
+        uint32_t total_i2c = comm_stats.i2c_success_count + comm_stats.i2c_error_count;
+        if (total_i2c > 0) {
+          i2c_success_rate = (float)comm_stats.i2c_success_count / total_i2c * 100.0;
+        }
+        snprintf(infoLines[9], sizeof(infoLines[9]), "║  I2C: %lu OK / %lu ERR (%.1f%% success)                  ║", 
+                 comm_stats.i2c_success_count, comm_stats.i2c_error_count, i2c_success_rate);
+        
+        // EasyTransfer Statistics  
+        float et_success_rate = 0;
+        uint32_t total_et = comm_stats.easytransfer_success_count + comm_stats.easytransfer_timeout_count;
+        if (total_et > 0) {
+          et_success_rate = (float)comm_stats.easytransfer_success_count / total_et * 100.0;
+        }
+        snprintf(infoLines[10], sizeof(infoLines[10]), "║  EasyTransfer: %lu OK / %lu TO (%.1f%% success)          ║", 
+                 comm_stats.easytransfer_success_count, comm_stats.easytransfer_timeout_count, et_success_rate);
+        
+        // Last Activity
+        unsigned long time_since_activity = (millis() - comm_stats.last_comm_activity) / 1000;
+        snprintf(infoLines[11], sizeof(infoLines[11]), "║  Last Communication: %lu seconds ago                     ║", time_since_activity);
+        
+        for(int i = 0; i < 12; i++) {
           Serial.println(infoLines[i]);
         }
       }
@@ -820,11 +1059,21 @@ void displaySubMenu()
       Serial.printf("║  Dummy Logging Status: %-8s  Sample Count: %-10llu ║", 
                     dummy_logging_active ? "ACTIVE" : "STOPPED", dummy_sample_count);
       Serial.println("║                                                          ║");
+      Serial.println("║  DUMMY LOGGING TESTS:                                   ║");
       Serial.println("║  1. Start Dummy Logging                                 ║");
       Serial.println("║  2. Stop Dummy Logging                                  ║");
       Serial.println("║  3. Test All Slots                                      ║");
       Serial.println("║  4. Set Logging Frequency                               ║");
       Serial.println("║  5. Reset Sample Counter                                ║");
+      Serial.println("║                                                          ║");
+      Serial.println("║  COMMUNICATION TESTS:                                   ║");
+      Serial.println("║  6. Test Communication (Legacy)                         ║");
+      Serial.println("║  7. Test Bidirectional Communication                    ║");
+      Serial.println("║  8. Ping All Slots                                      ║");
+      Serial.println("║  9. Query All Slot Status                               ║");
+      Serial.println("║  10. Query All Sensor Readings                          ║");
+      Serial.println("║  11. Query All Slot Configurations                      ║");
+      Serial.println("║  12. Debug Mode - Raw I2C Analysis                      ║");
       Serial.println("║                                                          ║");
       Serial.println("║  0. Back to main menu                                   ║");
       Serial.println("║                                                          ║");
@@ -929,10 +1178,10 @@ void processSubMenuInput(int cmd)
       break;
       
     case 5: // Test Mode
-      if (isValidInput(cmd, 1, 5)) {
+      if (isValidInput(cmd, 1, 12)) {
         processTestCommand(cmd);
       } else {
-        Serial.println("\n❌ ERROR: Invalid option! Please select 0-5.");
+        Serial.println("\n❌ ERROR: Invalid option! Please select 0-12.");
         displaySubMenu();
       }
       break;
@@ -1206,6 +1455,241 @@ void processTestCommand(int cmd)
         } else {
           Serial.println("❌ Sample counter reset cancelled");
         }
+      }
+      break;
+    case 6:
+      {
+        Serial.println("📡 Testing Communication Systems...");
+        Serial.println("   This will test I2C and EasyTransfer to verify statistics tracking");
+        
+        // Test I2C communication by sending a test configuration command
+        Serial.println("\n🔧 Testing I2C Communication:");
+        uint8_t testCmd[2] = {HID_REG, cd.hid};  // Send current HID as a test command
+        Serial.printf("   Sending HID configuration (current HID: %d)...", cd.hid);
+        if (wireBroadcast(testCmd, 2) == 0) {
+          Serial.println(" ✅ I2C Success!");
+        } else {
+          Serial.println(" ❌ I2C Failed!");
+        }
+        
+        // Test EasyTransfer communication by trying a timeout test
+        Serial.println("\n📡 Testing EasyTransfer Communication:");
+        Serial.println("   Testing timeout handling (this should timeout)...");
+        if (receiveDataWithTimeout(&EscRX, 100, 0)) {  // Very short timeout, no retries
+          Serial.println("   ✅ EasyTransfer Success (unexpected - no CSB connected)");
+        } else {
+          Serial.println("   ✅ EasyTransfer Timeout (expected - demonstrates timeout tracking)");
+        }
+        
+        // Display current statistics
+        Serial.println("\n📊 Current Communication Statistics:");
+        Serial.printf("   I2C: %lu success, %lu errors\n", comm_stats.i2c_success_count, comm_stats.i2c_error_count);
+        Serial.printf("   EasyTransfer: %lu success, %lu timeouts\n", comm_stats.easytransfer_success_count, comm_stats.easytransfer_timeout_count);
+        
+        Serial.println("\n💡 Tip: Check System Info (Main Menu → 4) to see detailed statistics!");
+      }
+      break;
+      
+    case 7: // Test Bidirectional Communication
+      {
+        Serial.println("🔄 Testing Bidirectional Communication...");
+        Serial.println("   Testing individual slot query functions");
+        
+        bool any_success = false;
+        for (int i = 0; i < 5; i++) {
+          slot_t slot = (slot_t)i;
+          Serial.printf("\n--- Testing Slot %d ---\n", slot + 1);
+          
+          // Test ping first
+          if (pingSlot(slot)) {
+            Serial.printf("✅ Slot %d: PING successful\n", slot + 1);
+            any_success = true;
+            
+            // Test status query
+            uint8_t status[4];
+            if (getSlotStatus(slot, status)) {
+              Serial.printf("✅ Slot %d: STATUS [ID:%d, Status:0x%02X, Errors:0x%02X, Activity:%d]\n", 
+                           slot + 1, status[0], status[1], status[2], status[3]);
+            }
+            
+            // Test sensor query
+            uint16_t sensor_value;
+            if (getSlotSensors(slot, &sensor_value)) {
+              Serial.printf("✅ Slot %d: SENSORS [Value:%d]\n", slot + 1, sensor_value);
+            }
+            
+            // Test config query
+            uint8_t config[4];
+            if (getSlotConfig(slot, config)) {
+              Serial.printf("✅ Slot %d: CONFIG [ID:%d, Type:%d, Sensors:%d, Axis:%d]\n", 
+                           slot + 1, config[0], config[1], config[2], config[3]);
+            }
+          } else {
+            Serial.printf("❌ Slot %d: No response to PING\n", slot + 1);
+          }
+          delay(100); // Brief delay between slots
+        }
+        
+        if (any_success) {
+          Serial.println("\n🎉 Bidirectional communication is working!");
+        } else {
+          Serial.println("\n⚠️  No slots responded - check connections");
+        }
+      }
+      break;
+      
+    case 8: // Ping All Slots
+      {
+        Serial.println("🏓 Pinging All Slots...");
+        bool any_online = false;
+        
+        for (int i = 0; i < 5; i++) {
+          slot_t slot = (slot_t)i;
+          Serial.printf("   Slot %d: ", slot + 1);
+          if (pingSlot(slot)) {
+            Serial.println("✅ ONLINE");
+            any_online = true;
+          } else {
+            Serial.println("❌ OFFLINE");
+          }
+          delay(50);
+        }
+        
+        Serial.printf("\n📊 Result: %s\n", any_online ? "Some slots are online" : "All slots offline");
+      }
+      break;
+      
+    case 9: // Query All Slot Status
+      {
+        Serial.println("📊 Querying All Slot Status...");
+        
+        for (int i = 0; i < 5; i++) {
+          slot_t slot = (slot_t)i;
+          uint8_t status[4];
+          Serial.printf("   Slot %d: ", slot + 1);
+          
+          if (getSlotStatus(slot, status)) {
+            const char* status_str = (status[1] == 0x01) ? "ONLINE" : "OFFLINE";
+            const char* error_str = (status[2] == 0x00) ? "No Errors" : "Has Errors";
+            Serial.printf("✅ %s | %s | Activity: %d\n", status_str, error_str, status[3]);
+          } else {
+            Serial.println("❌ No Response");
+          }
+          delay(50);
+        }
+      }
+      break;
+      
+    case 10: // Query All Sensor Readings
+      {
+        Serial.println("🔍 Querying All Sensor Readings...");
+        
+        for (int i = 0; i < 5; i++) {
+          slot_t slot = (slot_t)i;
+          uint16_t sensor_value;
+          Serial.printf("   Slot %d: ", slot + 1);
+          
+          if (getSlotSensors(slot, &sensor_value)) {
+            Serial.printf("✅ Sensor Value: %d\n", sensor_value);
+          } else {
+            Serial.println("❌ No Response");
+          }
+          delay(50);
+        }
+      }
+      break;
+      
+    case 11: // Query All Slot Configurations
+      {
+        Serial.println("⚙️  Querying All Slot Configurations...");
+        
+        for (int i = 0; i < 5; i++) {
+          slot_t slot = (slot_t)i;
+          uint8_t config[4];
+          Serial.printf("   Slot %d: ", slot + 1);
+          
+          if (getSlotConfig(slot, config)) {
+            const char* sensor_type = (config[1] == 0) ? "MFL" : "EGP";
+            Serial.printf("✅ Type: %s | Sensors: %d | Mag Axis: %d\n", 
+                         sensor_type, config[2], config[3]);
+          } else {
+            Serial.println("❌ No Response");
+          }
+          delay(50);
+        }
+      }
+      break;
+      
+    case 12: // Debug Mode - Raw I2C Communication Test
+      {
+        Serial.println("🔧 DEBUG: Raw I2C Communication Test...");
+        Serial.println("   This will show exactly what happens during I2C communication");
+        
+        for (int i = 0; i < 5; i++) {
+          slot_t slot = (slot_t)i;
+          Serial.printf("\n=== DEBUG SLOT %d ===\n", slot + 1);
+          
+          // Step 1: Send ping command
+          Serial.printf("Step 1: Sending PING command to slot %d\n", slot + 1);
+          send_I2C_cmd(slot, (uint8_t[]){I2C_CMD_PING}, 1);
+          delay(20);
+          
+          // Step 2: Select slot for response
+          Serial.printf("Step 2: Selecting slot %d for response\n", slot + 1);
+          for (uint8_t j = SLOT1; j <= SLOT5; j++) {
+            IOEX.digitalWrite(IOEX_ioPins[j], j == slot ? HIGH : LOW);
+          }
+          delay(5);
+          
+          // Step 2.5: Verify IOEX pin states
+          Serial.println("IOEX Pin States:");
+          for (uint8_t j = SLOT1; j <= SLOT5; j++) {
+            bool pin_state = IOEX.digitalRead(IOEX_ioPins[j]);
+            Serial.printf("   Slot %d Pin: %s %s\n", j+1, 
+                         pin_state ? "HIGH" : "LOW",
+                         (j == slot) ? "(SELECTED)" : "");
+          }
+          
+          // Step 3: Request data
+          uint8_t slot_addr = slot + 1; // Dynamic addressing: slot position = I2C address
+          Serial.printf("Step 3: Requesting 4 bytes from I2C address 0x%02X (slot %d)\n", slot_addr, slot + 1);
+          uint8_t bytes_available = Wire.requestFrom(slot_addr, 4);
+          Serial.printf("Wire.requestFrom() returned: %d bytes\n", bytes_available);
+          
+          // Step 4: Read data
+          uint8_t response[4] = {0};
+          uint8_t read_count = 0;
+          uint32_t timeout = millis() + 200;
+          
+          while (millis() < timeout && read_count < 4) {
+            if (Wire.available()) {
+              response[read_count] = Wire.read();
+              Serial.printf("Byte %d: 0x%02X (%d)\n", read_count, response[read_count], response[read_count]);
+              read_count++;
+            }
+            delayMicroseconds(100);
+          }
+          
+          Serial.printf("Total bytes read: %d/4\n", read_count);
+          Serial.printf("Response: [0x%02X, 0x%02X, 0x%02X, 0x%02X]\n", 
+                       response[0], response[1], response[2], response[3]);
+          
+          // Step 5: Validate
+          if (read_count == 4) {
+            if (response[1] == 0xAA && response[2] == 0x55 && response[3] == I2C_CMD_PING) {
+              Serial.printf("✅ Slot %d: Valid PING response\n", slot + 1);
+            } else {
+              Serial.printf("❌ Slot %d: Invalid PING response markers\n", slot + 1);
+            }
+          } else {
+            Serial.printf("❌ Slot %d: Incomplete response (%d bytes)\n", slot + 1, read_count);
+          }
+          
+          delay(100);
+        }
+        
+        Serial.println("\n💡 If slots show valid responses but are actually offline,");
+        Serial.println("   the issue is with I2C bus termination or addressing logic");
       }
       break;
   }
