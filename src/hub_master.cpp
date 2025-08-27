@@ -978,7 +978,7 @@ void displaySubMenu()
       {
         char configLine1[59], configLine2[59], configLine3[59];
         snprintf(configLine1, sizeof(configLine1), "║  Current HID: %-3d                                        ║", cd.hid);
-        snprintf(configLine2, sizeof(configLine2), "║  Sensors: %-3d     │  Sensor Type: %-3s                ║", 
+        snprintf(configLine2, sizeof(configLine2), "║  Default Sensors: %-2d │  System Type: %-3s              ║", 
                  cd.ns, (cd.sensor_Type == SENSOR_TYPE_MFL) ? "MFL" : "EGP");
         snprintf(configLine3, sizeof(configLine3), "║  Mag Axis: %-2d     │  Ang Axis: %-2d                     ║", 
                  cd.mag_axis, cd.ang_axis);
@@ -989,7 +989,8 @@ void displaySubMenu()
       Serial.println("║                                                          ║");
       Serial.println("║  1. Configure HID       │  4. Configure Ang Axis        ║");
       Serial.println("║  2. Configure SID       │  5. Configure Sensor Type     ║");
-      Serial.println("║  3. Configure Mag Axis  │                               ║");
+      Serial.println("║  3. Configure Mag Axis  │  6. EGP Sensor Heads Config   ║");
+      Serial.println("║                         │                               ║");
       Serial.println("║                                                          ║");
       Serial.println("║  0. Back to main menu                                   ║");
       Serial.println("║                                                          ║");
@@ -1154,10 +1155,10 @@ void processSubMenuInput(int cmd)
       break;
       
     case 3: // Configuration
-      if (isValidInput(cmd, 1, 5)) {
+      if (isValidInput(cmd, 1, 6)) {
         processConfigCommand(cmd);
       } else {
-        Serial.println("\n❌ ERROR: Invalid option! Please select 0-5.");
+        Serial.println("\n❌ ERROR: Invalid option! Please select 0-6.");
         displaySubMenu();
       }
       break;
@@ -1361,6 +1362,107 @@ void processConfigCommand(int cmd)
           }
         } else {
           Serial.println("❌ Invalid selection! Please enter 0 or 1");
+        }
+      }
+      break;
+      
+    case 6: // EGP Sensor Heads Configuration
+      {
+        Serial.println("🔧 EGP Sensor Heads Configuration");
+        Serial.println("══════════════════════════════════════════════════════════");
+        
+        // Check if system is in EGP mode
+        if(cd.sensor_Type != SENSOR_TYPE_EGP) {
+          Serial.println("❌ System is currently configured for MFL sensors.");
+          Serial.println("   Change sensor type to EGP first to configure sensor heads.");
+          Serial.println("   (Use option 5: Configure Sensor Type)");
+          break;
+        }
+        
+        Serial.println("Configure number of ACTIVE sensor heads per EGP slot:");
+        Serial.println("(Sample size remains fixed at 112 bytes - unused sensors are padded)");
+        Serial.printf("Current system sensor type: %s\n", 
+                     (cd.sensor_Type == SENSOR_TYPE_MFL) ? "MFL" : "EGP");
+        Serial.printf("Current default sensor heads: %d\n", cd.ns);
+        Serial.println();
+        
+        // TODO: Display current per-slot sensor head config from EEPROM/memory
+        Serial.println("Current Slot Configuration (Placeholder):");
+        Serial.println("  Slot 1: EGP, 8 active sensors (112 bytes total)");
+        Serial.println("  Slot 2: EGP, 6 active sensors (112 bytes total, 2 padded)");  
+        Serial.println("  Slot 3: EGP, 4 active sensors (112 bytes total, 4 padded)");
+        Serial.println("  Slot 4: EGP, 2 active sensors (112 bytes total, 6 padded)");
+        Serial.println("  Slot 5: EGP, 8 active sensors (112 bytes total)");
+        Serial.println();
+        
+        Serial.println("Select slot to configure sensor heads:");
+        Serial.println("1. Configure Slot 1 sensor heads");
+        Serial.println("2. Configure Slot 2 sensor heads"); 
+        Serial.println("3. Configure Slot 3 sensor heads");
+        Serial.println("4. Configure Slot 4 sensor heads");
+        Serial.println("5. Configure Slot 5 sensor heads");
+        Serial.println("6. Set all slots to default count");
+        Serial.println("0. Back to Configuration menu");
+        Serial.print("Select option (0-6): ");
+        
+        while(!Serial.available()) { delay(10); }
+        String input = Serial.readStringUntil('\n');
+        input.trim();
+        int slotChoice = input.toInt();
+        
+        if(slotChoice >= 1 && slotChoice <= 5) {
+          Serial.printf("\n🎛️  Configuring Slot %d Sensor Heads\n", slotChoice);
+          Serial.println("═══════════════════════════════════════");
+          Serial.printf("Current ACTIVE sensor heads for Slot %d: [Placeholder: 8]\n", slotChoice);
+          Serial.print("Enter number of ACTIVE sensor heads (1-8): ");
+          
+          while(!Serial.available()) { delay(10); }
+          input = Serial.readStringUntil('\n');
+          input.trim();
+          int sensorCount = input.toInt();
+          
+          if(sensorCount >= 1 && sensorCount <= 8) {
+            int activeSensorData = sensorCount * 14;
+            int paddedSensorData = (8 - sensorCount) * 14;
+            int totalDataSize = 8 * 14; // Always 112 bytes for 8 sensor positions
+            int totalSampleSize = 112; // SAMPLE_BUFFER_SIZE for EGP is fixed at 112 bytes
+            
+            Serial.printf("✅ Slot %d configured:\n", slotChoice);
+            Serial.printf("   Active sensor heads: %d\n", sensorCount);
+            Serial.printf("   Padded sensor positions: %d\n", 8 - sensorCount);
+            Serial.printf("   Active sensor data: %d bytes\n", activeSensorData);
+            Serial.printf("   Padded sensor data: %d bytes (filled with known values)\n", paddedSensorData);
+            Serial.printf("   Total sample size: %d bytes (FIXED)\n", totalSampleSize);
+            
+            // TODO: Save per-slot sensor count to EEPROM
+            // TODO: Send I2C command to specific slot to update its sensor count
+            // TODO: Configure slot to fill unused sensor positions with known padding values
+            Serial.println("   [TODO] Saving to slot-specific EEPROM...");
+            Serial.println("   [TODO] Broadcasting to slot via I2C...");
+            Serial.println("   [TODO] Configuring padding values for unused sensors...");
+            
+          } else {
+            Serial.println("❌ Invalid sensor count! Must be 1-8 active sensors");
+          }
+          
+        } else if(slotChoice == 6) {
+          Serial.printf("\nSetting all EGP slots to default sensor count: %d\n", cd.ns);
+          Serial.print("Continue? (y/n): ");
+          while(!Serial.available()) { delay(10); }
+          input = Serial.readStringUntil('\n');
+          input.trim();
+          input.toLowerCase();
+          
+          if(input == "y" || input == "yes") {
+            Serial.printf("✅ All slots set to %d sensor heads\n", cd.ns);
+            // TODO: Set all slots to default sensor count
+            Serial.println("   [TODO] Updating all slot configurations...");
+          } else {
+            Serial.println("❌ Operation cancelled");
+          }
+          
+        } else if(slotChoice != 0) {
+          Serial.println("❌ Invalid selection!");
         }
       }
       break;
