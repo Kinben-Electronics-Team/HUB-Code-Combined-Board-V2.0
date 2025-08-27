@@ -10,7 +10,7 @@ unsigned long sample_receive_count = 0;
 #endif
 
 // Live readout configuration
-unsigned long LIVE_READOUT_INTERVAL_MS = 3000; // Configurable interval for live sensor readout (3000ms = 3 seconds to match debug display)
+unsigned long LIVE_READOUT_INTERVAL_MS = 200; // Fast live readout - 200ms = 5Hz update rate (was 3000ms)
 
 /*varible for psram*/
 psram_spi_inst_t psram_spi = psram_spi_init(pio0, -1, false);
@@ -258,16 +258,18 @@ void trigger()
 }
 
 /**
- * \brief Set live readout interval
- * \param interval_ms New interval in milliseconds (minimum 500ms to prevent serial overload)
+ * \brief Set live readout speed
+ * \param interval_ms Update interval in milliseconds (minimum 50ms recommended)
  */
 void setLiveReadoutInterval(unsigned long interval_ms)
 {
-    if (interval_ms < 500) {
-        interval_ms = 500; // Minimum 500ms to prevent serial port overload
-    }
+    // Clamp to reasonable bounds
+    if (interval_ms < 50) interval_ms = 50;     // Max ~20Hz 
+    if (interval_ms > 10000) interval_ms = 10000; // Min 0.1Hz
+    
     LIVE_READOUT_INTERVAL_MS = interval_ms;
-    Serial.printf("Live readout interval set to %lu ms\n", LIVE_READOUT_INTERVAL_MS);
+    Serial.printf("Live readout speed changed to %lu ms (%.1f Hz)\n", 
+                 interval_ms, 1000.0 / interval_ms);
 }
 
 #endif // BUILD_SLOT
