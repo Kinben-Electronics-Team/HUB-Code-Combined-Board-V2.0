@@ -159,7 +159,7 @@ void setup_master()
   /*CSB pins initialisation*/
   pinMode(MODE_pin, INPUT_PULLDOWN); // Set mode pin as input with pull-down resistor
   pinMode(TRIG_pin, INPUT);
-  // attachInterrupt(TRIG_pin, trigger, RISING);
+  attachInterrupt(TRIG_pin, trigger, RISING); // Enable trigger interrupt at startup
 
   pinMode(TX_EN_pin, OUTPUT);
   digitalWrite(TX_EN_pin, TX_EN); // enable data tx
@@ -213,8 +213,10 @@ void loop_master()
   {
     Trig_stat = 0;
     digitalWrite(SLOT_TRIG_pin, HIGH);
-    if (!receiveDataWithTimeout(&EscRX, 50, 1)) // receive sample count from CSB with 50ms timeout + 1 retry
-      sc = 0;                 // reset sample count if not received
+    if (!receiveDataWithTimeout(&EscRX, 200, 3)) { // receive sample count from CSB with 200ms timeout + 3 retries
+      Serial.println("⚠️ Sample count timeout - keeping last value");
+      // Don't reset sc to 0, keep previous value to avoid getting stuck at 0
+    }
     // sc++;             // increment sample count
     EscTX.sendData(); // send sample count to CSB
 
@@ -259,15 +261,18 @@ void check_mode()
     if (mode_stat == ACQ_MODE) // logging mode
     {
       pixel.setPixelColor(0, pixel.Color(0, 255, 0)); // Set NeoPixel color to Green
-      Serial.end();
-      attachInterrupt(TRIG_pin, trigger, RISING);
+      Serial.println("🟢 Entering ACQUISITION mode");
+      Serial.println("Trigger interrupt is active, waiting for CSB triggers...");
+      // Interrupt already attached at startup, no need to attach again
+      // Keep Serial active for debugging
     }
     else
     {
-      pixel.setPixelColor(0, pixel.Color(255, 0, 0)); // Set NeoPixel color to Green
+      pixel.setPixelColor(0, pixel.Color(255, 0, 0)); // Set NeoPixel color to Red
       digitalWrite(TX_EN_pin, TX_EN);
-      detachInterrupt(TRIG_pin);
-      Serial.begin(BAUDRATE);
+      Serial.println("🔴 Entering OTHER mode (menu mode)");
+      // Keep interrupt attached but it won't be processed in OTHER_MODE
+      // Serial remains active for menu system
     }
 
     pixel.show(); // Update the NeoPixel color
